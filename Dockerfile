@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.26-alpine AS builder
+# GO_VERSION must satisfy the `go` directive in go.mod; the release workflow
+# passes it through so the builder, the tests and the module agree.
+ARG GO_VERSION=1.24
+FROM golang:${GO_VERSION}-alpine AS builder
 
 ARG VERSION=dev
 ARG TARGETOS

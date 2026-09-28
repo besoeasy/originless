@@ -31,8 +31,24 @@ docker rm originless
 | Variable | Default | Description |
 | --- | --- | --- |
 | `STORAGE_MAX` | `20GB` | Human-readable soft limit for the Kubo repository. |
+| `PORT` | `3232` | HTTP port inside the container. |
+| `IPFS_API_URL` | `http://127.0.0.1:5001` | Kubo RPC endpoint. |
+| `MAX_EVENTS` | `10000` | In-memory event cap. The oldest live events are evicted once it is reached. |
+| `UPLOAD_TMPDIR` | *system temp* | Directory multipart uploads are spooled to. The free space is checked before the body is read. |
 
 Automatic garbage collection is enabled at a fixed **90%** watermark and runs hourly. `STORAGE_MAX` is the only storage setting exposed as a Docker environment variable. Because uploads are unpinned, a CID may become unavailable after garbage collection.
+
+### Access control
+
+There is none, by design. Originless has no user accounts, no passwords and no API token: an Ed25519 signature on an event is the only credential in the protocol, and it proves **authorship** — who wrote an event — not **permission** to write it. Any client that can reach the port can publish to any collection, and CORS is `*` because there are no credentials for a browser to withhold.
+
+That makes the network boundary the trust boundary. The container publishes port 3232 on every interface so devices on your LAN can open the shared canvas and chat, which is the intended use. To keep a run private:
+
+```bash
+podman run -d --name originless -p 127.0.0.1:3232:3232 ghcr.io/besoeasy/originless:latest
+```
+
+For multi-user applications, enforce authorization in your own client or in a reverse proxy in front of Originless. The settings above are resource bounds, not access control.
 
 ## Upload and download files
 

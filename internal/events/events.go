@@ -3,6 +3,7 @@ package events
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
@@ -30,7 +31,14 @@ const (
 	maxEventLimit              = 100
 	maxEventSubscribers        = 256
 	sseKeepaliveInterval       = 15 * time.Second
+	// sseRetryInterval is advertised to EventSource clients so a dropped
+	// connection is re-established quickly and can be resumed.
+	sseRetryInterval = 3 * time.Second
 )
+
+// ReapInterval is how often expired events are deleted from the store.
+// Expired events are never served; the reaper only reclaims their memory.
+const ReapInterval = time.Hour
 
 var (
 	eventCollectionPattern = regexp.MustCompile(`^[a-z0-9/_-]{1,32}$`)
@@ -63,17 +71,16 @@ type eventInput struct {
 }
 
 type eventFilter struct {
-	Owner          string
-	Collection     string
-	Label          string
-	Blob           string
-	Search         string
-	Since          int64
-	Until          int64
-	AfterCreated   int64
-	AfterID        string
-	Limit          int
-	IncludeExpired bool
+	Owner        string
+	Collection   string
+	Label        string
+	Blob         string
+	Search       string
+	Since        int64
+	Until        int64
+	AfterCreated int64
+	AfterID      string
+	Limit        int
 }
 
 type eventSubscriber struct {
@@ -92,8 +99,10 @@ type eventLabelStat struct {
 }
 
 type EventStats struct {
-	Count           int                   `json:"count"`
-	Total           int                   `json:"total"`
+	Count int `json:"count"`
+	Total int `json:"total"`
+	// Expired counts events past their TTL that the hourly reaper has not
+	// reclaimed yet. Expired events are never served by any read.
 	Expired         int                   `json:"expired"`
 	UniqueOwners    int                   `json:"unique_owners"`
 	TopCollections  []eventCollectionStat `json:"top_collections"`
@@ -109,12 +118,24 @@ type Store struct {
 	mu          sync.Mutex
 	events      map[string]*Event
 	subscribers map[*eventSubscriber]struct{}
+	// maxEvents bounds in-memory growth. Zero means unbounded.
+	maxEvents int
+	// evicted counts events dropped because the store was full.
+	evicted int
 }
 
 func NewStore() *Store {
+	return NewStoreWithLimit(0)
+}
+
+// NewStoreWithLimit returns a store that keeps at most maxEvents live events.
+// When the limit is reached, the oldest live events are evicted so the newest
+// are always served and the process cannot grow without bound.
+func NewStoreWithLimit(maxEvents int) *Store {
 	return &Store{
 		events:      make(map[string]*Event),
 		subscribers: make(map[*eventSubscriber]struct{}),
+		maxEvents:   maxEvents,
 	}
 }
 
@@ -126,6 +147,7 @@ func (s *Store) insert(event *Event, now time.Time) (bool, string) {
 		return false, storedAt
 	}
 
+	s.evictLocked(now)
 	stored := cloneEvent(event)
 	stored.StoredAt = now.UTC().Format(time.RFC3339)
 	s.events[stored.ID] = stored
@@ -147,13 +169,11 @@ func (s *Store) insert(event *Event, now time.Time) (bool, string) {
 	return true, stored.StoredAt
 }
 
-func (s *Store) get(id string, now time.Time, includeExpired bool) (*Event, bool) {
+// get returns a live event by ID. Expired events are never served.
+func (s *Store) get(id string, now time.Time) (*Event, bool) {
 	s.mu.Lock()
-	if !includeExpired {
-		s.purgeExpiredLocked(now.Unix())
-	}
 	event, ok := s.events[id]
-	if ok && !includeExpired && event.ExpiresAt <= now.Unix() {
+	if ok && event.ExpiresAt <= now.Unix() {
 		ok = false
 	}
 	if ok {
@@ -165,17 +185,14 @@ func (s *Store) get(id string, now time.Time, includeExpired bool) (*Event, bool
 	return event, ok
 }
 
+// query returns matching live events, newest first, plus a cursor for the next
+// page. The cursor is only returned when another page actually exists, so a
+// caller never has to make a pointless trailing request.
 func (s *Store) query(filter eventFilter, now time.Time) ([]*Event, string) {
 	s.mu.Lock()
-	if !filter.IncludeExpired {
-		s.purgeExpiredLocked(now.Unix())
-	}
 	events := make([]*Event, 0, len(s.events))
 	for _, event := range s.events {
-		if !filter.matches(event) {
-			continue
-		}
-		if !filter.IncludeExpired && event.ExpiresAt <= now.Unix() {
+		if event.ExpiresAt <= now.Unix() || !filter.matches(event) {
 			continue
 		}
 		events = append(events, cloneEvent(event))
@@ -189,15 +206,138 @@ func (s *Store) query(filter eventFilter, now time.Time) ([]*Event, string) {
 		return events[i].ID > events[j].ID
 	})
 
+	nextCursor := ""
 	if filter.Limit > 0 && len(events) > filter.Limit {
 		events = events[:filter.Limit]
-	}
-	nextCursor := ""
-	if filter.Limit > 0 && len(events) == filter.Limit {
 		last := events[len(events)-1]
 		nextCursor = fmt.Sprintf("%d:%s", last.CreatedAt, last.ID)
 	}
 	return events, nextCursor
+}
+
+// Reap deletes expired events and reports how many were removed. Reads never
+// delete: expired events stay resident until the next reap so that a reaping
+// pass is the only thing that mutates the set of retained events.
+func (s *Store) Reap(now time.Time) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.purgeExpiredLocked(now.Unix())
+}
+
+// purgeExpiredLocked removes expired events and returns how many were removed.
+// Callers must hold s.mu.
+func (s *Store) purgeExpiredLocked(now int64) int {
+	removed := 0
+	for id, event := range s.events {
+		if event.ExpiresAt <= now {
+			delete(s.events, id)
+			removed++
+		}
+	}
+	return removed
+}
+
+// StartReaper deletes expired events every interval until ctx is done. A
+// non-positive interval falls back to ReapInterval.
+func (s *Store) StartReaper(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = ReapInterval
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				if removed := s.Reap(now); removed > 0 {
+					log.Printf("events: reaped %d expired event(s)", removed)
+				}
+			}
+		}
+	}()
+}
+
+// replayAfter returns matching live events published strictly after the anchor
+// event, oldest first, so a reconnecting SSE client can catch up on whatever
+// it missed. It reports false when the anchor is unknown, in which case the
+// client has nothing to resume from.
+func (s *Store) replayAfter(anchorID string, filter eventFilter, now time.Time) ([]*Event, bool) {
+	s.mu.Lock()
+	anchor, ok := s.events[anchorID]
+	if !ok {
+		s.mu.Unlock()
+		return nil, false
+	}
+	afterCreated, afterID := anchor.CreatedAt, anchor.ID
+	events := make([]*Event, 0, len(s.events))
+	for _, event := range s.events {
+		if event.ExpiresAt <= now.Unix() || !filter.matches(event) {
+			continue
+		}
+		if event.CreatedAt < afterCreated || (event.CreatedAt == afterCreated && event.ID <= afterID) {
+			continue
+		}
+		events = append(events, cloneEvent(event))
+	}
+	s.mu.Unlock()
+
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].CreatedAt != events[j].CreatedAt {
+			return events[i].CreatedAt < events[j].CreatedAt
+		}
+		return events[i].ID < events[j].ID
+	})
+	// Keep the newest events when a client has been away long enough to
+	// overflow the cap: those are the ones that bring it up to date, and they
+	// are already ordered oldest first.
+	if len(events) > maxEventLimit {
+		events = events[len(events)-maxEventLimit:]
+	}
+	return events, true
+}
+
+// evictLocked drops the oldest live events until there is room for one more.
+// Callers must hold s.mu. Expired events are dropped first and for free.
+func (s *Store) evictLocked(now time.Time) {
+	if s.maxEvents <= 0 {
+		return
+	}
+	if len(s.events) < s.maxEvents {
+		return
+	}
+	removed := s.purgeExpiredLocked(now.Unix())
+	for len(s.events) >= s.maxEvents {
+		victim := ""
+		first := true
+		for id, event := range s.events {
+			switch {
+			case first:
+				victim, first = id, false
+			case event.CreatedAt < s.events[victim].CreatedAt:
+				victim = id
+			case event.CreatedAt == s.events[victim].CreatedAt && id < victim:
+				victim = id
+			}
+		}
+		if victim == "" {
+			return
+		}
+		delete(s.events, victim)
+		removed++
+	}
+	s.evicted += removed
+	if removed > 0 {
+		log.Printf("events: store full at %d events, evicted %d oldest event(s)", s.maxEvents, removed)
+	}
+}
+
+// Evicted reports how many events have been dropped because the store was full.
+func (s *Store) Evicted() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.evicted
 }
 
 func (s *Store) subscribe(filter eventFilter) (*eventSubscriber, bool) {
@@ -279,14 +419,6 @@ func (s *Store) Stats(now time.Time) EventStats {
 		stats.TopLabels = stats.TopLabels[:10]
 	}
 	return stats
-}
-
-func (s *Store) purgeExpiredLocked(now int64) {
-	for id, event := range s.events {
-		if event.ExpiresAt <= now {
-			delete(s.events, id)
-		}
-	}
 }
 
 func cloneEvent(event *Event) *Event {
@@ -391,7 +523,9 @@ func validateEvent(raw []byte, now time.Time) (*Event, error) {
 		return nil, fmt.Errorf("missing data (must be a JSON object)")
 	}
 
-	owner := strings.TrimSpace(*input.Owner)
+	// Normalize the owner to lower case before it is signed or stored, so the
+	// same key always yields the same event ID and matches an ?owner= filter.
+	owner := strings.ToLower(strings.TrimSpace(*input.Owner))
 	collection := *input.Collection
 	createdAt := *input.CreatedAt
 	expiresAt := *input.ExpiresAt
@@ -563,12 +697,11 @@ func marshalCanonicalJSON(value any) []byte {
 
 func parseEventFilter(values url.Values) (eventFilter, error) {
 	filter := eventFilter{
-		Owner:          values.Get("owner"),
-		Collection:     values.Get("collection"),
-		Label:          values.Get("label"),
-		Search:         values.Get("search"),
-		Limit:          defaultEventLimit,
-		IncludeExpired: values.Get("include_expired") == "true",
+		Owner:      strings.ToLower(values.Get("owner")),
+		Collection: values.Get("collection"),
+		Label:      values.Get("label"),
+		Search:     values.Get("search"),
+		Limit:      defaultEventLimit,
 	}
 	if value := values.Get("limit"); value != "" {
 		limit, err := strconv.Atoi(value)
@@ -719,8 +852,7 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "event not found"})
 		return
 	}
-	includeExpired := r.URL.Query().Get("include_expired") == "true"
-	event, ok := h.store.get(id, time.Now(), includeExpired)
+	event, ok := h.store.get(id, time.Now())
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "event not found"})
 		return
@@ -763,8 +895,24 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return true
 	}
-	if !writeFrame([]byte(": connected\n\n")) {
+	// Advertise a reconnect delay so a dropped connection resumes promptly.
+	if !writeFrame([]byte(fmt.Sprintf("retry: %d\n: connected\n\n", sseRetryInterval.Milliseconds()))) {
 		return
+	}
+
+	// Replay whatever was published while the client was disconnected. The
+	// subscriber is already attached, so nothing published from here on can be
+	// missed; replayed IDs are recorded to avoid delivering them twice.
+	replayed := make(map[string]struct{})
+	if anchor := strings.TrimSpace(r.Header.Get("Last-Event-ID")); anchor != "" {
+		if backlog, ok := h.store.replayAfter(anchor, filter, time.Now()); ok {
+			for _, event := range backlog {
+				replayed[event.ID] = struct{}{}
+				if !writeFrame(sseFrame(event)) {
+					return
+				}
+			}
+		}
 	}
 
 	ticker := time.NewTicker(sseKeepaliveInterval)
@@ -778,16 +926,22 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case event := <-subscriber.ch:
-			data, err := json.Marshal(event)
-			if err != nil {
+			if _, duplicate := replayed[event.ID]; duplicate {
 				continue
 			}
-			frame := []byte("event: event\nid: " + event.ID + "\ndata: " + string(data) + "\n\n")
-			if !writeFrame(frame) {
+			if !writeFrame(sseFrame(event)) {
 				return
 			}
 		}
 	}
+}
+
+func sseFrame(event *Event) []byte {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return nil
+	}
+	return []byte("event: event\nid: " + event.ID + "\ndata: " + string(data) + "\n\n")
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

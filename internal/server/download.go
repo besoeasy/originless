@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/besoeasy/originless/internal/ipfs"
 )
@@ -19,6 +20,12 @@ type downloadHandler struct {
 }
 
 const ipfsPathPrefix = "/ipfs/"
+
+// downloadWriteTimeout is how long a single write to the client may stall
+// before the transfer is abandoned. The deadline is refreshed on every chunk,
+// so a slow but progressing client is never cut off mid-download, while a
+// client that stops reading releases its goroutine and its IPFS connection.
+const downloadWriteTimeout = 30 * time.Second
 
 func (h *downloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, ipfsPathPrefix) {
@@ -70,8 +77,37 @@ func (h *downloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Bound how long the client may stall. SetWriteDeadline arms a deadline on
+	// the underlying connection, so each Write must refresh it for long
+	// transfers to survive.
+	controller := http.NewResponseController(w)
+	setWriteDeadline := func() error {
+		return controller.SetWriteDeadline(time.Now().Add(downloadWriteTimeout))
+	}
+	if err := setWriteDeadline(); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		log.Printf("set download deadline: %v", err)
+	}
+
 	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		log.Printf("stream IPFS download %s: %v", cid, err)
+	// Small buffer: enough to keep the pipe busy without holding large
+	// amounts of an upload-sized body in memory per connection.
+	buffer := make([]byte, 64*1024)
+	for {
+		n, readErr := resp.Body.Read(buffer)
+		if n > 0 {
+			if _, writeErr := w.Write(buffer[:n]); writeErr != nil {
+				log.Printf("stream IPFS download %s: %v", cid, writeErr)
+				return
+			}
+			if err := setWriteDeadline(); err != nil && !errors.Is(err, http.ErrNotSupported) {
+				return
+			}
+		}
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				log.Printf("stream IPFS download %s: %v", cid, readErr)
+			}
+			return
+		}
 	}
 }

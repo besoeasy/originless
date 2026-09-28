@@ -2,12 +2,14 @@
 package server
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/events"
 	"github.com/besoeasy/originless/internal/ipfs"
 )
@@ -47,6 +49,9 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	}
 }
 
+// corsMiddleware allows any origin. Originless holds no credentials, so
+// there is nothing for a browser to withhold: a cross-origin caller can reach
+// the API exactly as a direct one can, by design.
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -60,24 +65,58 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// NewRouter builds a router with the default configuration. It is convenient
+// for tests and for callers that do not need to tune anything.
 func NewRouter(client *ipfs.Client) http.Handler {
+	return NewRouterWithOptions(context.Background(), client, config.Default())
+}
+
+// NewRouterWithOptions builds the router.
+//
+// ctx bounds the lifetime of background work, so cancelling it stops the
+// expired-event reaper. Expired events are never served; the reaper only
+// reclaims their memory.
+func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) http.Handler {
 	mux := http.NewServeMux()
-	store := events.NewStore()
+	store := events.NewStoreWithLimit(cfg.MaxEvents)
+	store.StartReaper(ctx, events.ReapInterval)
 	mux.HandleFunc("/", serveIndex)
 	mux.Handle("/stats", &statsHandler{client: client, events: store})
-	mux.Handle("/up", &uploadHandler{client: client})
-	mux.Handle("/upf", &uploadHandler{client: client, folder: true})
+	mux.Handle("/up", &uploadHandler{client: client, cfg: cfg})
+	mux.Handle("/upf", &uploadHandler{client: client, cfg: cfg, folder: true})
 	mux.Handle("/ipfs/", &downloadHandler{client: client})
 	mux.Handle("/cid/{cid}", &cidHandler{client: client})
 	mux.Handle("/events", events.NewHandler(store))
 	mux.Handle("/events/", events.NewHandler(store))
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/healthz", healthzHandler(client))
+	return corsMiddleware(mux)
+}
+
+// healthzHandler reports liveness of both the app and the IPFS node it depends
+// on. A container whose node is unreachable cannot serve uploads, downloads or
+// stats, so reporting it healthy would be misleading.
+func healthzHandler(client *ipfs.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", http.MethodGet)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	return corsMiddleware(mux)
+		if client == nil {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "ipfs": "unchecked"})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), requestTimeout)
+		defer cancel()
+		if _, err := client.RepoStats(ctx); err != nil {
+			log.Printf("health check: IPFS node unavailable: %v", err)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"status": "degraded",
+				"ipfs":   "unavailable",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "ipfs": "ok"})
+	}
 }

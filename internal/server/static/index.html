@@ -1307,7 +1307,7 @@
       const ev = await createSignedEvent(CHAT_COLLECTION, CHAT_LABEL, { message, timestamp: Math.floor(Date.now() / 1000) });
       const res = await fetch("/events", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(ev)
       });
       const payload = await res.json();
@@ -1365,7 +1365,7 @@
         const ev = await createSignedEvent(CANVAS_COLLECTION, CANVAS_LABEL, { x, y, color, timestamp: Math.floor(Date.now() / 1000) });
         const res = await fetch("/events", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(ev)
         });
         const payload = await res.json();
@@ -1456,10 +1456,13 @@
         cursor = payload.next_cursor || "";
         if (!cursor) break;
       }
-      history.sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id));
-      history.forEach(applyCanvasEvent);
-      queuedCanvasEvents.sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id));
-      queuedCanvasEvents.splice(0).forEach(applyCanvasEvent);
+      // Merge the fetched history with anything the live stream buffered while
+      // this request was in flight, then apply in publish order. Sorting the
+      // two together matters: a buffered event can be older than a history
+      // event for the same cell, and applying it last would regress the cell.
+      const merged = history.concat(queuedCanvasEvents.splice(0));
+      merged.sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id));
+      merged.forEach(applyCanvasEvent);
       canvasHistoryReady = true;
     }
 
@@ -1482,14 +1485,20 @@
     async function initializeCanvas() {
       resetCanvas();
       canvasStatus.textContent = "Loading history…";
+      // Subscribe before loading history. Until the history has been applied,
+      // live events buffer in queuedCanvasEvents, so nothing published during
+      // startup is lost between the history response and the subscription.
+      connectCanvasStream();
       try {
         await loadCanvasHistory();
         canvasStatus.textContent = "Live · Ready to paint";
       } catch (_) {
+        queuedCanvasEvents.splice(0)
+          .sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id))
+          .forEach(applyCanvasEvent);
         canvasHistoryReady = true;
         canvasStatus.textContent = "Live · Ready";
       }
-      connectCanvasStream();
     }
 
     // IPFS Dropzone File Upload

@@ -146,6 +146,59 @@ func TestHealthzJSON(t *testing.T) {
 	}
 }
 
+// A container whose IPFS node is unreachable cannot serve uploads, downloads
+// or stats, so healthz must not report it healthy.
+func TestHealthzReportsUnavailableNode(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("node down"))
+	}))
+	defer upstream.Close()
+
+	client, err := ipfs.NewClient(upstream.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["status"] != "degraded" || payload["ipfs"] != "unavailable" {
+		t.Errorf("payload = %+v, want degraded/unavailable", payload)
+	}
+}
+
+func TestHealthzReportsHealthyNode(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"NumObjects":1,"SizeStat":{"RepoSize":10,"StorageMax":0},"Version":"fs-repo@18"}`))
+	}))
+	defer upstream.Close()
+
+	client, err := ipfs.NewClient(upstream.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["status"] != "ok" || payload["ipfs"] != "ok" {
+		t.Errorf("payload = %+v, want ok/ok", payload)
+	}
+}
+
 func TestCORSMiddleware(t *testing.T) {
 	preflight := httptest.NewRecorder()
 	NewRouter(nil).ServeHTTP(preflight, httptest.NewRequest(http.MethodOptions, "/events", nil))

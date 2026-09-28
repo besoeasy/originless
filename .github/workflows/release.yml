@@ -37,8 +37,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.26"
+          # Test against the exact version go.mod declares, so a language
+          # feature newer than the module floor cannot slip in unnoticed.
+          go-version-file: go.mod
           cache: true
+
+      - name: Check Go version
+        id: go
+        run: echo "version=$(go env GOVERSION | sed 's/^go//')" >> "$GITHUB_OUTPUT"
 
       - name: Syntax and test check
         run: |
@@ -102,6 +108,7 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ steps.tag.outputs.tag }}
+            GO_VERSION=${{ steps.go.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

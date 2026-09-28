@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/ipfs"
 	"github.com/besoeasy/originless/internal/server"
 )
@@ -40,27 +41,39 @@ func main() {
 		log.Fatal(err)
 	}
 
+	cfg, err := config.FromEnv(os.LookupEnv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("originless: settings %s", cfg.Describe())
+
 	client, err := ipfs.NewClient(os.Getenv("IPFS_API_URL"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// The reaper and any other background work stop when this context is done.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	httpServer := &http.Server{
 		Addr:              ":" + port,
-		Handler:           server.NewRouter(client),
+		Handler:           server.NewRouterWithOptions(ctx, client, cfg),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       0,
 		WriteTimeout:      0,
 		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 16,
 	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-stop
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := httpServer.Shutdown(ctx); err != nil {
+		cancel()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			log.Printf("HTTP shutdown failed: %v", err)
 		}
 	}()

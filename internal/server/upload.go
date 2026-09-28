@@ -12,6 +12,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/ipfs"
 )
 
@@ -37,6 +38,7 @@ type uploadResponse struct {
 
 type uploadHandler struct {
 	client *ipfs.Client
+	cfg    config.Config
 	folder bool
 }
 
@@ -57,8 +59,27 @@ func (h *uploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Multipart parts are spooled to disk before they are added to IPFS, so
+	// check there is room for the whole request before reading any of it.
+	spool, err := h.spoolDir()
+	if err != nil {
+		log.Printf("upload spool directory unavailable: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "upload storage is unavailable",
+		})
+		return
+	}
+	if err := ensureFreeSpace(spool, maxUploadBytes); err != nil {
+		log.Printf("upload rejected, insufficient spool space: %v", err)
+		w.Header().Set("Retry-After", "60")
+		writeJSON(w, http.StatusInsufficientStorage, map[string]string{
+			"error": "not enough free space to accept this upload",
+		})
+		return
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes+maxMultipartOverhead)
-	files, totalBytes, err := parseUploadFiles(r, maxUploadBytes)
+	files, totalBytes, err := parseUploadFiles(r, maxUploadBytes, spool)
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, errUploadTooLarge) {
@@ -99,7 +120,20 @@ func (h *uploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func parseUploadFiles(r *http.Request, maxBytes int64) (files []ipfs.UploadFile, totalBytes int64, err error) {
+// spoolDir returns the directory multipart parts are written to, creating it
+// when configured. An empty UPLOAD_TMPDIR means the system temporary directory.
+func (h *uploadHandler) spoolDir() (string, error) {
+	dir := strings.TrimSpace(h.cfg.UploadTmpDir)
+	if dir == "" {
+		return os.TempDir(), nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func parseUploadFiles(r *http.Request, maxBytes int64, spoolDir string) (files []ipfs.UploadFile, totalBytes int64, err error) {
 	defer func() {
 		if err != nil {
 			removeUploadFiles(files)
@@ -154,7 +188,7 @@ func parseUploadFiles(r *http.Request, maxBytes int64) (files []ipfs.UploadFile,
 			continue
 		}
 
-		temp, createErr := os.CreateTemp("", "originless-upload-*")
+		temp, createErr := os.CreateTemp(spoolDir, "originless-upload-*")
 		if createErr != nil {
 			_ = part.Close()
 			return nil, totalBytes, fmt.Errorf("create upload temporary file: %w", createErr)

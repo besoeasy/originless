@@ -14,6 +14,8 @@ type statsResponse struct {
 	ipfs.IPFSStats
 	StorageMode string            `json:"storage_mode"`
 	Events      events.EventStats `json:"events"`
+	// Evicted counts events dropped because MAX_EVENTS was reached.
+	Evicted int `json:"events_evicted"`
 }
 
 type statsHandler struct {
@@ -44,12 +46,15 @@ func (h *statsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	eventStats := events.EventStats{}
+	evicted := 0
 	if h.events != nil {
 		eventStats = h.events.Stats(time.Now())
+		evicted = h.events.Evicted()
 	}
 	writeJSON(w, http.StatusOK, statsResponse{
 		IPFSStats:   stats,
 		StorageMode: "ephemeral",
 		Events:      eventStats,
+		Evicted:     evicted,
 	})
 }

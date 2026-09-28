@@ -25,6 +25,9 @@ embedded IPFS node with pinning disabled.
 
 Returns the Kubo repository statistics:
 
+`events.expired` counts events past their TTL that the hourly reaper has not
+reclaimed yet. Expired events are never served by any read.
+
 ```json
 {
   "NumObjects": 12,
@@ -53,11 +56,20 @@ Returns the Kubo repository statistics:
 
 ## `GET /healthz`
 
+Reports the health of the app and the IPFS node it depends on. A container
+whose node is unreachable cannot serve uploads, downloads or stats, so it is
+reported as degraded rather than healthy. This is also the container
+`HEALTHCHECK` target.
+
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "ipfs": "ok"
 }
 ```
+
+When the node cannot be reached the response is `503` with
+`{"status":"degraded","ipfs":"unavailable"}`.
 
 ## Events
 
@@ -73,6 +85,10 @@ owner:collection:created_at:expires_at:canonical_data:blob:labels_csv
 `canonical_data` is compact JSON with recursively sorted object keys. The event
 ID is the lowercase SHA-256 hex digest of that message, and `sig` is the
 Ed25519 signature of the 32-byte digest encoded as 128 hex characters.
+
+`owner` is normalized to lower case before it is signed and stored, so one
+public key always produces the same event ID and always matches an `?owner=`
+filter. Clients must sign using the lower-case form of the key.
 
 ### `POST /events`
 
@@ -97,19 +113,29 @@ The optional `blob` field is retained for compatibility with the original event 
 Query live events with `collection`, `label`, `owner`, `since`, `until`,
 `search`, `blob`, `limit`, and `cursor`. Results are newest first. The default
 limit is 50 and the maximum is 100. Pass the returned `next_cursor` unchanged
-to fetch the next page.
+to fetch the next page. `next_cursor` is empty on the final page, so there is
+no need for a trailing request to discover the end of the result set.
 
 ### `GET /events/{id}`
 
-Returns the event JSON by its server-computed ID. Expired events are hidden
-unless `include_expired=true` is supplied.
+Returns the event JSON by its server-computed ID. Expired events are never
+served and are reported as `404`.
 
 ### `GET /events/stream`
 
 Streams newly published matching events as Server-Sent Events. Filters include
 `collection` and `label` (the other event query filters are also accepted).
 
+The first frame carries a `retry` field so clients reconnect after three
+seconds. Each event frame sets `id`, so a browser `EventSource` resends it as
+`Last-Event-ID` on reconnect; the server then replays everything published
+after that event, so a client that was briefly disconnected does not silently
+miss events. Replay is capped at the newest 100 events and is skipped if the
+anchor event is no longer held.
+
 Events are currently held in memory and are lost when the app process stops.
+Expired events are never served and are deleted by a background reaper that
+runs hourly.
 
 ## `POST /up`
 
@@ -194,7 +220,7 @@ curl http://localhost:3232/cid/<cid>
 If the block exists on the node, `available` is `true` and all other fields
 for the available data are included. If the block is missing locally,
 `available` is `false`, an `error` message is returned, and `block`/`object`
-are omitted. Requests for a CID in an unreachable IPFS node return `502`.
+are omitted. Requests for a CID in an unreachable IPFS node return `503`.
 
 ## Upload response
 

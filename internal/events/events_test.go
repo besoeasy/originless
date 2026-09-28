@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -96,24 +97,138 @@ func TestSignedEventLifecycle(t *testing.T) {
 	}
 }
 
-func TestExpiredEventRequiresIncludeExpired(t *testing.T) {
+// Expired events are never served, and they stay resident until the hourly
+// reaper reclaims them rather than being deleted by a read.
+func TestExpiredEventsAreNeverServed(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()-1, "chat", map[string]any{"message": "expired"}, []string{}, "")
 	store := NewStore()
 	handler := NewHandler(store)
-	published := publishTestEvent(t, handler, raw)
-	publishedID := eventIDFromResponse(t, published)
+	publishedID := eventIDFromResponse(t, publishTestEvent(t, handler, raw))
 
-	queryRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(queryRecorder, httptest.NewRequest(http.MethodGet, "/events?include_expired=true", nil))
-	if queryRecorder.Code != http.StatusOK || !strings.Contains(queryRecorder.Body.String(), "expired") {
-		t.Errorf("include_expired response = %d/%s, want expired event", queryRecorder.Code, queryRecorder.Body.String())
+	for _, path := range []string{
+		"/events",
+		"/events?collection=chat",
+		"/events/" + publishedID,
+		"/events/" + publishedID + "?include_expired=true",
+	} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if strings.Contains(recorder.Body.String(), publishedID) {
+			t.Errorf("%s exposed an expired event: %s", path, recorder.Body.String())
+		}
 	}
 
-	getRecorder := httptest.NewRecorder()
-	handler.ServeHTTP(getRecorder, httptest.NewRequest(http.MethodGet, "/events/"+publishedID, nil))
-	if getRecorder.Code != http.StatusNotFound {
-		t.Errorf("expired get status = %d, want %d", getRecorder.Code, http.StatusNotFound)
+	byID := httptest.NewRecorder()
+	handler.ServeHTTP(byID, httptest.NewRequest(http.MethodGet, "/events/"+publishedID, nil))
+	if byID.Code != http.StatusNotFound {
+		t.Errorf("expired get status = %d, want %d", byID.Code, http.StatusNotFound)
+	}
+
+	// Reads must not have deleted it; the reaper owns deletion.
+	if stats := store.Stats(now); stats.Expired != 1 || stats.Total != 1 {
+		t.Errorf("stats after reads = %+v, want the expired event still resident", stats)
+	}
+	if removed := store.Reap(now); removed != 1 {
+		t.Errorf("Reap() removed %d events, want 1", removed)
+	}
+	if stats := store.Stats(now); stats.Total != 0 {
+		t.Errorf("stats after reap = %+v, want the store empty", stats)
+	}
+}
+
+func TestStoreReaperRemovesExpiredEvents(t *testing.T) {
+	store := NewStore()
+	now := time.Now().Truncate(time.Second)
+	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()-1, "chat", map[string]any{"message": "expired"}, []string{}, "")
+	event, err := validateEvent(raw, now)
+	if err != nil {
+		t.Fatalf("validate event: %v", err)
+	}
+	store.insert(event, now)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store.StartReaper(ctx, 10*time.Millisecond)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if store.Stats(now).Total == 0 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("reaper did not remove the expired event")
+}
+
+// A page that exactly fills the limit is the last page, so no cursor is
+// returned and clients do not make a pointless trailing request.
+func TestEventQueryOmitsCursorOnLastPage(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	store := NewStore()
+	handler := NewHandler(store)
+	for i := 0; i < 3; i++ {
+		raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()+3600, "chat", map[string]any{"i": i}, []string{}, "")
+		publishTestEvent(t, handler, raw)
+	}
+
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/events?collection=chat&limit=3", nil))
+	var result struct {
+		Events     []Event `json:"events"`
+		NextCursor string  `json:"next_cursor"`
+	}
+	if err := json.Unmarshal(page.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode page: %v", err)
+	}
+	if len(result.Events) != 3 {
+		t.Fatalf("events = %d, want 3", len(result.Events))
+	}
+	if result.NextCursor != "" {
+		t.Errorf("next_cursor = %q, want empty on the final page", result.NextCursor)
+	}
+
+	partial := httptest.NewRecorder()
+	handler.ServeHTTP(partial, httptest.NewRequest(http.MethodGet, "/events?collection=chat&limit=2", nil))
+	var first struct {
+		Events     []Event `json:"events"`
+		NextCursor string  `json:"next_cursor"`
+	}
+	if err := json.Unmarshal(partial.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decode partial page: %v", err)
+	}
+	if len(first.Events) != 2 || first.NextCursor == "" {
+		t.Fatalf("partial page = %d events, cursor %q; want 2 events and a cursor", len(first.Events), first.NextCursor)
+	}
+}
+
+// The owner is canonicalized to lower case so one key always produces one ID
+// and matches an ?owner= filter regardless of the case used to query it.
+func TestEventOwnerIsCaseNormalized(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+	raw, owner := testutil.MakeSignedEvent(t, now.Unix()-10, now.Unix()+3600, "chat", map[string]any{"message": "case"}, []string{}, "")
+	if strings.ToLower(owner) != owner {
+		t.Fatalf("testutil owner %q is not lower case", owner)
+	}
+
+	store := NewStore()
+	handler := NewHandler(store)
+	event, err := validateEvent(raw, now)
+	if err != nil {
+		t.Fatalf("validate event: %v", err)
+	}
+	if event.Owner != owner {
+		t.Errorf("owner = %q, want lower case %q", event.Owner, owner)
+	}
+	publishTestEvent(t, handler, raw)
+
+	upperRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(upperRecorder, httptest.NewRequest(http.MethodGet, "/events?owner="+strings.ToUpper(owner), nil))
+	if !strings.Contains(upperRecorder.Body.String(), event.ID) {
+		t.Errorf("upper case ?owner= did not match: %s", upperRecorder.Body.String())
+	}
+	if stats := store.Stats(now); stats.UniqueOwners != 1 {
+		t.Errorf("unique_owners = %d, want 1", stats.UniqueOwners)
 	}
 }
 
@@ -222,6 +337,10 @@ func TestEventStreamEndpoint(t *testing.T) {
 	}
 
 	reader := bufio.NewReader(response.Body)
+	retry, err := reader.ReadString('\n')
+	if err != nil || retry != fmt.Sprintf("retry: %d\n", sseRetryInterval.Milliseconds()) {
+		t.Fatalf("retry frame = %q, error = %v", retry, err)
+	}
 	connected, err := reader.ReadString('\n')
 	if err != nil || connected != ": connected\n" {
 		t.Fatalf("connected frame = %q, error = %v", connected, err)
@@ -234,19 +353,123 @@ func TestEventStreamEndpoint(t *testing.T) {
 	raw, _ := testutil.MakeSignedEvent(t, now.Unix(), now.Unix()+3600, "chat", map[string]any{"message": "streamed"}, []string{}, "")
 	publishTestEvent(t, handler, raw)
 
-	var frame strings.Builder
+	frame := readSSEFrame(t, reader)
+	if !strings.Contains(frame, "event: event") || !strings.Contains(frame, "data: {") {
+		t.Errorf("event frame = %q, want event and JSON data", frame)
+	}
+}
+
+// readSSEFrame reads frames until one carries data, skipping retry, connected
+// and keepalive comment lines, and returns the raw frame text.
+func readSSEFrame(t *testing.T, reader *bufio.Reader) string {
+	t.Helper()
 	for {
-		line, readErr := reader.ReadString('\n')
-		if readErr != nil {
-			t.Fatalf("read event frame: %v", readErr)
+		var frame strings.Builder
+		sawData := false
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				t.Fatalf("read event frame: %v (frame so far %q)", err, frame.String())
+			}
+			if line == "\n" {
+				break
+			}
+			if strings.HasPrefix(line, "data: ") {
+				sawData = true
+			}
+			frame.WriteString(line)
 		}
-		frame.WriteString(line)
-		if line == "\n" {
-			break
+		if sawData {
+			return frame.String()
 		}
 	}
-	if !strings.Contains(frame.String(), "event: event") || !strings.Contains(frame.String(), "data: {") {
-		t.Errorf("event frame = %q, want event and JSON data", frame.String())
+}
+
+// A client that reconnects with Last-Event-ID receives everything published
+// while it was away instead of silently losing those events.
+func TestEventStreamResumesFromLastEventID(t *testing.T) {
+	store := NewStore()
+	handler := NewHandler(store)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	open := func(lastEventID string) (*http.Response, *bufio.Reader, context.CancelFunc) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/events/stream?collection=chat", nil)
+		if err != nil {
+			cancel()
+			t.Fatalf("create stream request: %v", err)
+		}
+		if lastEventID != "" {
+			request.Header.Set("Last-Event-ID", lastEventID)
+		}
+		response, err := server.Client().Do(request)
+		if err != nil {
+			cancel()
+			t.Fatalf("open event stream: %v", err)
+		}
+		return response, bufio.NewReader(response.Body), cancel
+	}
+
+	now := time.Now().Truncate(time.Second)
+
+	// Attach, then publish, so the first event arrives over the live stream.
+	response, reader, cancelFirst := open("")
+	defer cancelFirst()
+	first, _ := testutil.MakeSignedEvent(t, now.Unix()-20, now.Unix()+3600, "chat", map[string]any{"message": "before"}, []string{}, "")
+	firstID := eventIDFromResponse(t, publishTestEvent(t, handler, first))
+	if frame := readSSEFrame(t, reader); !strings.Contains(frame, firstID) {
+		t.Fatalf("live frame = %q, want %s", frame, firstID)
+	}
+	response.Body.Close()
+
+	// Published while nobody is listening.
+	missed, _ := testutil.MakeSignedEvent(t, now.Unix()-10, now.Unix()+3600, "chat", map[string]any{"message": "missed"}, []string{}, "")
+	missedID := eventIDFromResponse(t, publishTestEvent(t, handler, missed))
+
+	resumed, resumedReader, cancelResumed := open(firstID)
+	defer cancelResumed()
+	defer resumed.Body.Close()
+	frame := readSSEFrame(t, resumedReader)
+	if !strings.Contains(frame, missedID) {
+		t.Errorf("resumed frame = %q, want the event published while disconnected (%s)", frame, missedID)
+	}
+	if strings.Contains(frame, firstID) {
+		t.Errorf("resumed frame replayed the anchor event itself: %q", frame)
+	}
+}
+
+// An unknown Last-Event-ID must not break the stream; the client simply
+// continues with live events.
+func TestEventStreamIgnoresUnknownLastEventID(t *testing.T) {
+	store := NewStore()
+	handler := NewHandler(store)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL+"/events/stream?collection=chat", nil)
+	if err != nil {
+		t.Fatalf("create stream request: %v", err)
+	}
+	request.Header.Set("Last-Event-ID", "does-not-exist")
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatalf("open event stream: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("stream status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	reader := bufio.NewReader(response.Body)
+	now := time.Now().Truncate(time.Second)
+	raw, _ := testutil.MakeSignedEvent(t, now.Unix(), now.Unix()+3600, "chat", map[string]any{"message": "live"}, []string{}, "")
+	publishTestEvent(t, handler, raw)
+	if frame := readSSEFrame(t, reader); !strings.Contains(frame, "event: event") {
+		t.Errorf("frame = %q, want a live event", frame)
 	}
 }
 
