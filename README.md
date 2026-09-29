@@ -67,11 +67,7 @@ curl \
   http://localhost:3232/upf
 ```
 
-The response contains the resulting CID. Download content available in the local node through the standard gateway-shaped path:
-
-```bash
-curl -OJ http://localhost:3232/ipfs/<cid>
-```
+The response contains the resulting CID.
 
 For content available through the public IPFS network, use [inbrowser.link](https://inbrowser.link/ipfs/), [Helia Verified Fetch](https://github.com/ipfs/helia-verified-fetch), or a dedicated gateway such as [Rainbow](https://github.com/ipfs/rainbow).
 
@@ -86,7 +82,6 @@ The complete request and response reference is in [`docs/api.md`](docs/api.md).
 | `GET` | `/stats` | IPFS and event metrics |
 | `POST` | `/up` | Upload a file or folder |
 | `POST` | `/upf` | Explicit folder upload |
-| `GET` | `/ipfs/{cid}` | Retrieve locally available content |
 | `GET` | `/cid/{cid}` | JSON metadata and availability for a CID |
 | `POST` | `/events` | Publish a signed event |
 | `GET` | `/events` | Query events with filters and pagination |

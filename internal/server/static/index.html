@@ -558,7 +558,7 @@
           <span class="marker">[*]</span>
           <div>
             <p class="feature-name">IPFS-Native Content</p>
-            <p class="feature-desc">Upload files through <code>/up</code>, address them by CID, serve them from the embedded Kubo node. Open any CID anywhere at <code>inbrowser.link/ipfs/&lt;cid&gt;</code>.</p>
+            <p class="feature-desc">Upload files through <code>/up</code>, address them by CID, inspect them with <code>/cid/{cid}</code>. Open any CID anywhere at <code>inbrowser.link/ipfs/&lt;cid&gt;</code>.</p>
           </div>
         </div>
         <div class="feature reveal">
@@ -637,8 +637,8 @@
         <div class="mini-card reveal" style="border-top-color:var(--color-teal);">
           <span class="mini-emoji">📦</span>
           <h3>Content-Addressed</h3>
-          <p class="mini-sub">IPFS CIDs, Served Locally</p>
-          <p>Upload files up to 1 GiB through <code>/up</code> and <code>/upf</code>. Every file is addressed by its IPFS CID, served from the local node at <code>/ipfs/{cid}</code>, and viewable anywhere via public gateways.</p>
+          <p class="mini-sub">IPFS CIDs, Metadata Locally</p>
+          <p>Upload files up to 1 GiB through <code>/up</code> and <code>/upf</code>. Every file is addressed by its IPFS CID and viewable anywhere via public gateways.</p>
           <p class="replaces"><strong>Replaces:</strong> AWS S3, Cloudflare R2, MinIO, 0x0.st</p>
         </div>
         <div class="mini-card reveal" style="border-top-color:var(--color-purple);">
@@ -810,9 +810,9 @@
             </tr>
             <tr>
               <td><span class="method-pill method-get">GET</span></td>
-              <td><code>/ipfs/{cid}</code></td>
-              <td>Download content from the local repository</td>
-              <td style="color:var(--color-text-muted);">Binary</td>
+              <td><code>/cid/{cid}</code></td>
+              <td>JSON metadata and availability for a CID</td>
+              <td style="color:var(--color-text-muted);">JSON</td>
             </tr>
             <tr>
               <td><span class="method-pill method-post">POST</span></td>
@@ -1537,10 +1537,6 @@
         info.append(name, meta);
         const actions = document.createElement("div");
         actions.style.cssText = "display:flex; gap:1rem; align-items:center;";
-        const dl = document.createElement("a");
-        dl.href = `/ipfs/${encodeURIComponent(data.cid)}`;
-        dl.target = "_blank";
-        dl.textContent = "Download";
         const view = document.createElement("a");
         view.href = `https://inbrowser.link/ipfs/${encodeURIComponent(data.cid)}`;
         view.target = "_blank";
@@ -1550,7 +1546,7 @@
         copyBtn.type = "button";
         copyBtn.textContent = "Copy CID";
         copyBtn.addEventListener("click", () => copySnippet(data.cid));
-        actions.append(dl, view, copyBtn);
+        actions.append(view, copyBtn);
         li.append(info, actions);
         uploadHistory.prepend(li);
         showToast("Uploaded to IPFS: " + (data.cid ? data.cid.slice(0, 12) + "…" : "OK"));

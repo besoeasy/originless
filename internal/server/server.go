@@ -84,7 +84,6 @@ func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.C
 	mux.Handle("/stats", &statsHandler{client: client, events: store})
 	mux.Handle("/up", &uploadHandler{client: client, cfg: cfg})
 	mux.Handle("/upf", &uploadHandler{client: client, cfg: cfg, folder: true})
-	mux.Handle("/ipfs/", &downloadHandler{client: client})
 	mux.Handle("/cid/{cid}", &cidHandler{client: client})
 	mux.Handle("/events", events.NewHandler(store))
 	mux.Handle("/events/", events.NewHandler(store))
