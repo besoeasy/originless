@@ -47,7 +47,8 @@ reclaimed yet. Expired events are never served by any read.
     "stored_bytes": 2048,
     "subscribers": 1,
     "max_subscribers": 256
-  }
+  },
+  "events_evicted": 0
 }
 ```
 

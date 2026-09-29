@@ -512,7 +512,7 @@
         <div class="stat-cell reveal">
           <p class="stat-label">Repository size</p>
           <div class="stat-value" id="repo-size">—</div>
-          <p class="stat-sub">Limit: <span id="storage-limit">—</span></p>
+          <p class="stat-sub"><span id="storage-pct">—</span> · Limit: <span id="storage-limit">—</span></p>
         </div>
         <div class="stat-cell reveal">
           <p class="stat-label">IPFS objects</p>
@@ -522,7 +522,7 @@
         <div class="stat-cell reveal">
           <p class="stat-label">Live events</p>
           <div class="stat-value" id="event-count">—</div>
-          <p class="stat-sub"><span id="event-bytes">—</span> held in memory</p>
+          <p class="stat-sub"><span id="event-bytes">—</span> · <span id="event-total">—</span> stored</p>
         </div>
         <div class="stat-cell reveal">
           <p class="stat-label">Unique signers</p>
@@ -532,12 +532,12 @@
         <div class="stat-cell reveal">
           <p class="stat-label">Stream subscribers</p>
           <div class="stat-value" id="event-subscribers">—</div>
-          <p class="stat-sub">Active SSE sockets</p>
+          <p class="stat-sub"><span id="event-sub-detail">—</span> SSE sockets</p>
         </div>
         <div class="stat-cell reveal">
           <p class="stat-label">Expired events</p>
           <div class="stat-value" id="event-expired">—</div>
-          <p class="stat-sub">Pruned TTLs</p>
+          <p class="stat-sub"><span id="event-evicted">—</span> evicted by cap</p>
         </div>
       </div>
     </section>
@@ -574,6 +574,8 @@
         <p class="eyebrow" style="margin-bottom:0.75rem;"><span class="marker">[*]</span> Collections</p>
         <div id="collections-empty" class="state">Loading collections…</div>
         <div id="top-collections-pills" class="collections-flex" hidden></div>
+        <p class="eyebrow" style="margin:1.25rem 0 0.75rem;"><span class="marker">[*]</span> Labels</p>
+        <div id="top-labels-pills" class="collections-flex" hidden></div>
       </div>
 
       <div class="panel reveal" style="margin-top:1.5rem;">
@@ -582,6 +584,8 @@
           <div><dt>Status</dt><dd id="node-diag-status">Checking…</dd></div>
           <div><dt>Storage</dt><dd>Ephemeral · in-container</dd></div>
           <div><dt>Engine</dt><dd id="node-diag-version">Kubo IPFS</dd></div>
+          <div><dt>Events</dt><dd id="node-diag-events">—</dd></div>
+          <div><dt>Event range</dt><dd id="node-diag-range">—</dd></div>
           <div><dt>Health</dt><dd><a href="/healthz" target="_blank">/healthz</a></dd></div>
         </dl>
       </div>
@@ -888,13 +892,20 @@
     // Overview Stats
     const repoSize = document.getElementById("repo-size");
     const storageLimit = document.getElementById("storage-limit");
+    const storagePct = document.getElementById("storage-pct");
     const objects = document.getElementById("objects");
     const eventCount = document.getElementById("event-count");
     const eventOwners = document.getElementById("event-owners");
     const eventBytes = document.getElementById("event-bytes");
+    const eventTotal = document.getElementById("event-total");
     const eventExpired = document.getElementById("event-expired");
+    const eventEvicted = document.getElementById("event-evicted");
     const eventSubscribers = document.getElementById("event-subscribers");
+    const eventSubDetail = document.getElementById("event-sub-detail");
+    const nodeDiagEvents = document.getElementById("node-diag-events");
+    const nodeDiagRange = document.getElementById("node-diag-range");
     const topCollectionsPills = document.getElementById("top-collections-pills");
+    const topLabelsPills = document.getElementById("top-labels-pills");
     const collectionsEmpty = document.getElementById("collections-empty");
     // Chat
     const chatState = document.getElementById("chat-state");
@@ -1082,19 +1093,42 @@
         const data = await response.json();
         const size = data.SizeStat || {};
         const events = data.events || {};
+        const evicted = Number(data.events_evicted || 0);
 
         repoSize.textContent = formatBytes(size.RepoSize);
-        storageLimit.textContent = size.StorageMax ? formatBytes(size.StorageMax) : "Unlimited";
+        if (size.StorageMax) {
+          const pct = (Number(size.RepoSize) / Number(size.StorageMax)) * 100;
+          storagePct.textContent = `${pct.toFixed(pct < 10 ? 1 : 0)}% used`;
+          storageLimit.textContent = formatBytes(size.StorageMax);
+        } else {
+          storagePct.textContent = "no cap";
+          storageLimit.textContent = "Unlimited";
+        }
         objects.textContent = Number(data.NumObjects || 0).toLocaleString();
 
         const count = Number(events.count || 0);
+        const total = Number(events.total || 0);
+        const expired = Number(events.expired || 0);
         eventCount.textContent = count.toLocaleString();
+        eventTotal.textContent = `${total.toLocaleString()} total`;
         eventOwners.textContent = Number(events.unique_owners || 0).toLocaleString();
         eventBytes.textContent = formatBytes(events.stored_bytes || 0);
-        eventExpired.textContent = Number(events.expired || 0).toLocaleString();
-        eventSubscribers.textContent = Number(events.subscribers || 0).toLocaleString();
+        eventExpired.textContent = expired.toLocaleString();
+        eventEvicted.textContent = evicted.toLocaleString();
+        const subs = Number(events.subscribers || 0);
+        const maxSubs = Number(events.max_subscribers || 0);
+        eventSubscribers.textContent = subs.toLocaleString();
+        eventSubDetail.textContent = maxSubs > 0 ? `${subs.toLocaleString()} of ${maxSubs.toLocaleString()} active` : `${subs.toLocaleString()} active`;
+
+        if (nodeDiagEvents) nodeDiagEvents.textContent = `${count.toLocaleString()} live / ${total.toLocaleString()} stored · ${expired.toLocaleString()} expired`;
+        if (nodeDiagRange) {
+          const oldest = Number(events.oldest_created_at || 0);
+          const newest = Number(events.newest_created_at || 0);
+          nodeDiagRange.textContent = oldest > 0 && newest > 0 ? `${formatEventTime(oldest)} → ${formatEventTime(newest)}` : "—";
+        }
 
         renderTopCollections(events.top_collections || []);
+        renderTopLabels(events.top_labels || []);
       } catch (err) {
         showToast("Stats error: " + err.message);
       } finally {
@@ -1127,6 +1161,31 @@
         count.textContent = Number(col.count || 0).toLocaleString();
         pill.append(bullet, name, count);
         topCollectionsPills.appendChild(pill);
+      }
+    }
+
+    function renderTopLabels(labels) {
+      if (!topLabelsPills) return;
+      topLabelsPills.replaceChildren();
+      if (!labels || labels.length === 0) {
+        topLabelsPills.hidden = true;
+        return;
+      }
+      topLabelsPills.hidden = false;
+      for (const item of labels.slice(0, 10)) {
+        const pill = document.createElement("div");
+        pill.className = "collection-pill";
+        const bullet = document.createElement("span");
+        bullet.className = "collection-bullet";
+        bullet.textContent = "[*]";
+        const name = document.createElement("span");
+        name.className = "collection-pill-name";
+        name.textContent = item.label;
+        const count = document.createElement("span");
+        count.className = "collection-pill-count";
+        count.textContent = Number(item.count || 0).toLocaleString();
+        pill.append(bullet, name, count);
+        topLabelsPills.appendChild(pill);
       }
     }
 
