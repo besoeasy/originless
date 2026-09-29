@@ -883,7 +883,6 @@
     const healthText = document.getElementById("health-text");
     const pingText = document.getElementById("ping-text");
     const nodeDiagStatus = document.getElementById("node-diag-status");
-    const nodeDiagVersion = document.getElementById("node-diag-version");
     const toastContainer = document.getElementById("toast-container");
 
     // Overview Stats
@@ -1087,7 +1086,6 @@
         repoSize.textContent = formatBytes(size.RepoSize);
         storageLimit.textContent = size.StorageMax ? formatBytes(size.StorageMax) : "Unlimited";
         objects.textContent = Number(data.NumObjects || 0).toLocaleString();
-        if (data.Version) nodeDiagVersion.textContent = `Kubo ${data.Version}`;
 
         const count = Number(events.count || 0);
         eventCount.textContent = count.toLocaleString();

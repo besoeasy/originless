@@ -28,7 +28,6 @@ type IPFSStats struct {
 		RepoSize   uint64 `json:"RepoSize"`
 		StorageMax uint64 `json:"StorageMax"`
 	} `json:"SizeStat"`
-	Version string `json:"Version"`
 }
 
 type Client struct {

@@ -22,7 +22,6 @@ func TestRepoStats(t *testing.T) {
 				"RepoSize":   2048,
 				"StorageMax": 4096,
 			},
-			"Version": "fs-repo@16",
 		})
 	}))
 	defer server.Close()
@@ -44,8 +43,5 @@ func TestRepoStats(t *testing.T) {
 	}
 	if stats.NumObjects != 12 || stats.SizeStat.RepoSize != 2048 || stats.SizeStat.StorageMax != 4096 {
 		t.Errorf("stats = %+v, want expected repository statistics", stats)
-	}
-	if stats.Version != "fs-repo@16" {
-		t.Errorf("metadata = %+v, want expected repository metadata", stats)
 	}
 }

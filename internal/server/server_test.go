@@ -65,7 +65,7 @@ func TestStatsJSON(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.NumObjects != 7 || response.SizeStat.RepoSize != 1024 || response.StorageMode != "ephemeral" {
+	if response.NumObjects != 7 || response.SizeStat.RepoSize != 1024 {
 		t.Errorf("stats = %+v, want expected statistics", response)
 	}
 	if response.Events.Total != 0 || response.Events.Count != 0 || response.Events.UniqueOwners != 0 {

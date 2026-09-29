@@ -34,8 +34,6 @@ reclaimed yet. Expired events are never served by any read.
     "RepoSize": 2048,
     "StorageMax": 10000000000
   },
-  "Version": "fs-repo@18",
-  "storage_mode": "ephemeral",
   "events": {
     "count": 4,
     "total": 5,
