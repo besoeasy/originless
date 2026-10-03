@@ -1498,7 +1498,7 @@
       const since = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
       const history = [];
       let cursor = "";
-      for (let p = 0; p < 10; p += 1) {
+      do {
         const params = new URLSearchParams({
           collection: CANVAS_COLLECTION,
           label: CANVAS_LABEL,
@@ -1511,8 +1511,7 @@
         if (!res.ok) break;
         history.push(...(payload.events || []));
         cursor = payload.next_cursor || "";
-        if (!cursor) break;
-      }
+      } while (cursor);
       // Merge the fetched history with anything the live stream buffered while
       // this request was in flight, then apply in publish order. Sorting the
       // two together matters: a buffered event can be older than a history
