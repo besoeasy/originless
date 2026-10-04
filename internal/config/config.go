@@ -8,6 +8,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -73,10 +74,14 @@ func storageMaxBytes(value string) (int64, error) {
 	}
 	v = strings.TrimSpace(v)
 	amount, err := strconv.ParseFloat(v, 64)
-	if err != nil || amount <= 0 {
+	if err != nil || amount <= 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return 0, fmt.Errorf("invalid size %q", value)
 	}
-	return int64(amount * float64(mult)), nil
+	bytes := int64(amount * float64(mult))
+	if bytes < 1<<20 {
+		return 0, fmt.Errorf("invalid size %q: must be at least 1MB", value)
+	}
+	return bytes, nil
 }
 
 // FromEnv builds a Config from the environment. getenv is called with the
