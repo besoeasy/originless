@@ -46,7 +46,7 @@ EXPOSE 3232/tcp
 
 STOPSIGNAL SIGTERM
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:3232/healthz || exit 1
+    CMD wget -qO- "http://127.0.0.1:${PORT:-3232}/healthz" || exit 1
 
 USER originless
 ENTRYPOINT ["/app/entrypoint.sh"]
