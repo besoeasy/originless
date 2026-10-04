@@ -120,15 +120,32 @@ limit is 50 and the maximum is 100. Pass the returned `next_cursor` unchanged
 to fetch the next page. `next_cursor` is empty on the final page, so there is
 no need for a trailing request to discover the end of the result set.
 
+The response envelope is:
+
+```json
+{
+  "status": "success",
+  "events": [ /* event objects */ ],
+  "records": [ /* same list, for older clients */ ],
+  "limit": 50,
+  "cursor": "",
+  "next_cursor": "1758420100:abc..."
+}
+```
+
 ### `GET /events/{id}`
 
 Returns the event JSON by its server-computed ID. Expired events are never
-served and are reported as `404`.
+served and are reported as `404`. The response carries the event twice:
+`{"status":"success","event":{...},"record":{...}}`.
 
 ### `GET /events/stream`
 
-Streams newly published matching events as Server-Sent Events. Filters include
-`collection` and `label` (the other event query filters are also accepted).
+Streams newly published matching events as Server-Sent Events. Live-delivery
+filters: `collection`, `label`, `owner`, `search`, `blob`, `since`, `until`.
+The `cursor` parameter is not accepted here — its list-pagination semantics
+("events older than this position") would suppress new events; resume instead
+with `Last-Event-ID`.
 
 The first frame carries a `retry` field so clients reconnect after three
 seconds. Each event frame sets `id`, so a browser `EventSource` resends it as

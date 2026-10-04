@@ -1073,6 +1073,12 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	if r.URL.Query().Get("cursor") != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "cursor is not supported on the stream; use Last-Event-ID to resume",
+		})
+		return
+	}
 	subscriber, ok := h.store.subscribe(filter)
 	if !ok {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "too many event stream subscribers"})

@@ -67,6 +67,8 @@ expose the API only on networks you trust.
 Federation note: sync checkpoints on `created_at`, so client clocks should be
 roughly in step and `created_at` should be "now" — events backdated far
 beyond the 15-minute drift window are not guaranteed to sync between nodes.
+Checkpoints are persisted in each node's SQLite database, so a node resumes
+where it left off after a restart instead of re-pulling everything.
 
 Only events are synced. IPFS uploads stay on the node that accepted them,
 and each node has its own `/data/events.db` — sync keeps the *contents*
