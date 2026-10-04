@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -50,8 +52,15 @@ func NewClient(rawURL string) (*Client, error) {
 	}
 
 	return &Client{
-		baseURL:    baseURL,
-		httpClient: &http.Client{},
+		baseURL: baseURL,
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+				TLSHandshakeTimeout:   5 * time.Second,
+				ResponseHeaderTimeout: 30 * time.Second,
+				IdleConnTimeout:       60 * time.Second,
+			},
+		},
 	}, nil
 }
 
