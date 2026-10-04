@@ -18,7 +18,7 @@ docker run -d --name originless -p 3232:3232 -e STORAGE_MAX=20GB ghcr.io/besoeas
 
 Open the dashboard at [http://localhost:3232](http://localhost:3232).
 
-The container has no volume mount. Its IPFS repository and events database live in the container filesystem, so stopping the container preserves its writable layer, while removing the container deletes that data. To keep them across container replacement, mount a volume at `/data`.
+The container has no volume mount. Its IPFS repository and events database live in the container filesystem, so stopping the container preserves its writable layer, while removing the container deletes that data.
 
 ```bash
 docker logs -f originless
@@ -97,7 +97,7 @@ The complete request and response reference is in [`docs/api.md`](docs/api.md).
 | `GET` | `/events/{id}` | Retrieve one event |
 | `GET` | `/events/stream` | Stream events over SSE |
 
-Events are currently held in memory and are lost when the container is restarted. Content uploaded to IPFS is also ephemeral from Originless's perspective: the container does not mount a persistent volume and does not pin uploads.
+Events are stored in SQLite at `/data/events.db` and survive process restarts. Content uploaded to IPFS is also ephemeral by default: the container does not mount a persistent volume and does not pin uploads.
 
 ## Signed events
 
