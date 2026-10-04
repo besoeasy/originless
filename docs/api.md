@@ -131,9 +131,11 @@ after that event, so a client that was briefly disconnected does not silently
 miss events. Replay is capped at the newest 100 events and is skipped if the
 anchor event is no longer held.
 
-Events are currently held in memory and are lost when the app process stops.
-Expired events are never served and are deleted by a background reaper that
-runs hourly.
+Events are kept in a SQLite database (`EVENTS_DB_PATH`, `/data/events.db` in
+the container) and survive process restarts. If the variable is unset they
+are held in memory only and are lost when the app process stops. Expired
+events are never served and are deleted by a background reaper that runs
+hourly.
 
 ## `POST /up`
 
