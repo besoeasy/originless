@@ -522,7 +522,7 @@
         <div class="stat-cell reveal">
           <p class="stat-label">Live events</p>
           <div class="stat-value" id="event-count">—</div>
-          <p class="stat-sub"><span id="event-bytes">—</span> · <span id="event-total">—</span> stored</p>
+          <p class="stat-sub"><span id="event-bytes">—</span> · <span id="event-total">—</span> stored · <span id="event-db">—</span> on disk</p>
         </div>
         <div class="stat-cell reveal">
           <p class="stat-label">Unique signers</p>
@@ -537,7 +537,7 @@
         <div class="stat-cell reveal">
           <p class="stat-label">Expired events</p>
           <div class="stat-value" id="event-expired">—</div>
-          <p class="stat-sub"><span id="event-evicted">—</span> evicted by cap</p>
+          <p class="stat-sub"><span id="event-evicted">—</span> evicted by size budget</p>
         </div>
       </div>
     </section>
@@ -897,6 +897,7 @@
     const eventCount = document.getElementById("event-count");
     const eventOwners = document.getElementById("event-owners");
     const eventBytes = document.getElementById("event-bytes");
+    const eventDb = document.getElementById("event-db");
     const eventTotal = document.getElementById("event-total");
     const eventExpired = document.getElementById("event-expired");
     const eventEvicted = document.getElementById("event-evicted");
@@ -1113,6 +1114,7 @@
         eventTotal.textContent = `${total.toLocaleString()} total`;
         eventOwners.textContent = Number(events.unique_owners || 0).toLocaleString();
         eventBytes.textContent = formatBytes(events.stored_bytes || 0);
+        eventDb.textContent = formatBytes(events.db_bytes || 0);
         eventExpired.textContent = expired.toLocaleString();
         eventEvicted.textContent = evicted.toLocaleString();
         const subs = Number(events.subscribers || 0);
