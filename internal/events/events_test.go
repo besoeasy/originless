@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func TestSignedEventLifecycle(t *testing.T) {
 		"user":    "alice",
 		"message": "Hello world!",
 	}, []string{"room:lobby"}, "")
-	router := NewHandler(NewStore())
+	router := NewHandler(newTestStore(t))
 
 	recorder := publishTestEvent(t, router, raw)
 	if recorder.Code != http.StatusCreated {
@@ -102,7 +103,7 @@ func TestSignedEventLifecycle(t *testing.T) {
 func TestExpiredEventsAreNeverServed(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()-1, "chat", map[string]any{"message": "expired"}, []string{}, "")
-	store := NewStore()
+	store := newTestStore(t)
 	handler := NewHandler(store)
 	publishedID := eventIDFromResponse(t, publishTestEvent(t, handler, raw))
 
@@ -138,7 +139,7 @@ func TestExpiredEventsAreNeverServed(t *testing.T) {
 }
 
 func TestStoreReaperRemovesExpiredEvents(t *testing.T) {
-	store := NewStore()
+	store := newTestStore(t)
 	now := time.Now().Truncate(time.Second)
 	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()-1, "chat", map[string]any{"message": "expired"}, []string{}, "")
 	event, err := validateEvent(raw, now)
@@ -165,7 +166,7 @@ func TestStoreReaperRemovesExpiredEvents(t *testing.T) {
 // returned and clients do not make a pointless trailing request.
 func TestEventQueryOmitsCursorOnLastPage(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
-	store := NewStore()
+	store := newTestStore(t)
 	handler := NewHandler(store)
 	for i := 0; i < 3; i++ {
 		raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()+3600, "chat", map[string]any{"i": i}, []string{}, "")
@@ -211,7 +212,7 @@ func TestEventOwnerIsCaseNormalized(t *testing.T) {
 		t.Fatalf("testutil owner %q is not lower case", owner)
 	}
 
-	store := NewStore()
+	store := newTestStore(t)
 	handler := NewHandler(store)
 	event, err := validateEvent(raw, now)
 	if err != nil {
@@ -243,7 +244,7 @@ func eventIDFromResponse(t *testing.T, recorder *httptest.ResponseRecorder) stri
 
 func TestEventQueryCursorAndFilters(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
-	store := NewStore()
+	store := newTestStore(t)
 	handler := NewHandler(store)
 	first, _ := testutil.MakeSignedEvent(t, now.Unix()-20, now.Unix()+3600, "chat", map[string]any{"message": "first"}, []string{"room:lobby"}, "")
 	second, _ := testutil.MakeSignedEvent(t, now.Unix()-10, now.Unix()+3600, "chat", map[string]any{"message": "second"}, []string{"room:lobby"}, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
@@ -298,7 +299,7 @@ func TestEventValidationRejectsBadSignatureAndTTL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal tampered event: %v", err)
 	}
-	router := NewHandler(NewStore())
+	router := NewHandler(newTestStore(t))
 	badSignature := publishTestEvent(t, router, tampered)
 	if badSignature.Code != http.StatusUnauthorized {
 		t.Errorf("tampered status = %d, want %d", badSignature.Code, http.StatusUnauthorized)
@@ -313,7 +314,7 @@ func TestEventValidationRejectsBadSignatureAndTTL(t *testing.T) {
 }
 
 func TestEventStreamEndpoint(t *testing.T) {
-	store := NewStore()
+	store := newTestStore(t)
 	handler := NewHandler(store)
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -388,7 +389,7 @@ func readSSEFrame(t *testing.T, reader *bufio.Reader) string {
 // A client that reconnects with Last-Event-ID receives everything published
 // while it was away instead of silently losing those events.
 func TestEventStreamResumesFromLastEventID(t *testing.T) {
-	store := NewStore()
+	store := newTestStore(t)
 	handler := NewHandler(store)
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -443,7 +444,7 @@ func TestEventStreamResumesFromLastEventID(t *testing.T) {
 // An unknown Last-Event-ID must not break the stream; the client simply
 // continues with live events.
 func TestEventStreamIgnoresUnknownLastEventID(t *testing.T) {
-	store := NewStore()
+	store := newTestStore(t)
 	handler := NewHandler(store)
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -474,7 +475,7 @@ func TestEventStreamIgnoresUnknownLastEventID(t *testing.T) {
 }
 
 func TestEventStoreBroadcastsToMatchingSubscriber(t *testing.T) {
-	store := NewStore()
+	store := newTestStore(t)
 	subscriber, ok := store.subscribe(eventFilter{Collection: "chat"})
 	if !ok {
 		t.Fatal("subscribe returned false")
@@ -506,7 +507,7 @@ func TestPersistentStoreSurvivesReopen(t *testing.T) {
 		t.Fatalf("validateEvent: %v", err)
 	}
 
-	store, err := NewPersistentStore(path, 0)
+	store, err := NewStoreAt(path, 0)
 	if err != nil {
 		t.Fatalf("NewPersistentStore: %v", err)
 	}
@@ -517,7 +518,7 @@ func TestPersistentStoreSurvivesReopen(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	reopened, err := NewPersistentStore(path, 0)
+	reopened, err := NewStoreAt(path, 0)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -542,7 +543,7 @@ func TestPersistentStoreReapsExpiredRows(t *testing.T) {
 		t.Fatalf("validateEvent: %v", err)
 	}
 
-	store, err := NewPersistentStore(path, 0)
+	store, err := NewStoreAt(path, 0)
 	if err != nil {
 		t.Fatalf("NewPersistentStore: %v", err)
 	}
@@ -553,7 +554,7 @@ func TestPersistentStoreReapsExpiredRows(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	reopened, err := NewPersistentStore(path, 0)
+	reopened, err := NewStoreAt(path, 0)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
@@ -564,4 +565,14 @@ func TestPersistentStoreReapsExpiredRows(t *testing.T) {
 	if stats := reopened.Stats(now); stats.Total != 0 {
 		t.Errorf("total = %d, want 0 after expired rows are purged", stats.Total)
 	}
+}
+
+func newTestStore(t *testing.T) *Store {
+	t.Helper()
+	store, err := NewStoreAt(filepath.Join(t.TempDir(), "events.db"), 0)
+	if err != nil {
+		t.Fatalf("NewStoreAt: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+	return store
 }

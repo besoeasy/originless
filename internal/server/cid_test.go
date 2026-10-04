@@ -72,7 +72,7 @@ func TestCIDInfoAvailableFileWithJSON(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-file", nil))
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-file", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
@@ -114,7 +114,7 @@ func TestCIDInfoAvailableDirectory(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-dir", nil))
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-dir", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
@@ -150,7 +150,7 @@ func TestCIDInfoUnavailable(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-missing", nil))
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-missing", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
@@ -177,7 +177,7 @@ func TestCIDInfoNodeUnavailable(t *testing.T) {
 	}
 
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-any", nil))
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-any", nil))
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
@@ -196,7 +196,7 @@ func TestCIDInfoMethodNotAllowed(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/cid/bafy-file", nil))
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/cid/bafy-file", nil))
 
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)

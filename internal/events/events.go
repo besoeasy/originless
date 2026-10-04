@@ -125,30 +125,25 @@ type Store struct {
 	maxEvents int
 	// evicted counts events dropped because the store was full.
 	evicted int
-	// db is the durable backing store. Nil means memory-only.
+	// db is the durable backing store.
 	db *sql.DB
 }
 
-func NewStore() *Store {
-	return NewStoreWithLimit(0)
+// DefaultDBPath is where events are persisted when nothing overrides it. The
+// app always runs in a container that owns /data, so this is safe.
+const DefaultDBPath = "/data/events.db"
+
+// NewStore opens the default events database and returns a store that keeps
+// at most maxEvents live events.
+func NewStore(maxEvents int) (*Store, error) {
+	return NewStoreAt(DefaultDBPath, maxEvents)
 }
 
-// NewStoreWithLimit returns a store that keeps at most maxEvents live events.
-// When the limit is reached, the oldest live events are evicted so the newest
-// are always served and the process cannot grow without bound.
-func NewStoreWithLimit(maxEvents int) *Store {
-	return &Store{
-		events:      make(map[string]*Event),
-		subscribers: make(map[*eventSubscriber]struct{}),
-		maxEvents:   maxEvents,
-	}
-}
-
-// NewPersistentStore opens (creating if needed) a SQLite database at path and
+// NewStoreAt opens (creating if needed) a SQLite database at path and
 // returns a store whose events survive restarts. Live, unexpired events are
 // loaded into memory at open; every insert, eviction and reap is mirrored to
 // the database so the two never disagree. Expired rows are purged at open.
-func NewPersistentStore(path string, maxEvents int) (*Store, error) {
+func NewStoreAt(path string, maxEvents int) (*Store, error) {
 	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, fmt.Errorf("open events database: %w", err)
@@ -223,18 +218,12 @@ func NewPersistentStore(path string, maxEvents int) (*Store, error) {
 	return store, nil
 }
 
-// Close releases the database handle. It is a no-op for memory-only stores.
+// Close releases the database handle.
 func (s *Store) Close() error {
-	if s.db == nil {
-		return nil
-	}
 	return s.db.Close()
 }
 
 func (s *Store) dbInsert(event *Event) error {
-	if s.db == nil {
-		return nil
-	}
 	data, err := json.Marshal(event)
 	if err != nil {
 		return err
@@ -245,9 +234,6 @@ func (s *Store) dbInsert(event *Event) error {
 }
 
 func (s *Store) dbDelete(id string) error {
-	if s.db == nil {
-		return nil
-	}
 	_, err := s.db.Exec(`DELETE FROM events WHERE id = ?`, id)
 	return err
 }

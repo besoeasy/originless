@@ -122,7 +122,7 @@ func TestUpUploadsSingleFileWithoutPinning(t *testing.T) {
 		content:   "hello",
 	})
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, request)
+	mustNewRouter(t, client).ServeHTTP(recorder, request)
 	response := decodeUploadResponse(t, recorder)
 
 	if pin != "false" {
@@ -167,7 +167,7 @@ func TestUpAutomaticallyHandlesFolders(t *testing.T) {
 		testUploadPart{fieldName: "file", fileName: "folder/two.txt", content: "two"},
 	)
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, request)
+	mustNewRouter(t, client).ServeHTTP(recorder, request)
 	response := decodeUploadResponse(t, recorder)
 
 	if recursive != "true" || wrap != "true" {
@@ -204,7 +204,7 @@ func TestUpfForcesFolderMode(t *testing.T) {
 		content:   "one",
 	})
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, request)
+	mustNewRouter(t, client).ServeHTTP(recorder, request)
 	response := decodeUploadResponse(t, recorder)
 
 	if wrap != "true" {
@@ -248,7 +248,7 @@ func TestUploadRejectsPathTraversal(t *testing.T) {
 		content:   "secret",
 	})
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, request)
+	mustNewRouter(t, client).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
@@ -274,7 +274,7 @@ func TestUploadIPFSFailure(t *testing.T) {
 		content:   "hello",
 	})
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, request)
+	mustNewRouter(t, client).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadGateway)

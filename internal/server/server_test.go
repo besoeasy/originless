@@ -20,7 +20,7 @@ func TestHomePageIsEmbeddedAndDoesNotRequireIPFS(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 
-	router := NewRouter(client)
+	router := mustNewRouter(t, client)
 	for _, target := range []string{"/", "/index.html"} {
 		recorder := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, target, nil)
@@ -54,7 +54,7 @@ func TestStatsJSON(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/stats", nil)
-	router := NewRouter(client)
+	router := mustNewRouter(t, client)
 	router.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
@@ -85,7 +85,7 @@ func TestStatsIncludesEventStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
-	router := NewRouter(client)
+	router := mustNewRouter(t, client)
 	now := time.Now().Truncate(time.Second)
 	raw, _ := testutil.MakeSignedEvent(t, now.Unix(), now.Unix()+3600, "chat", map[string]any{"message": "hello"}, []string{"room:lobby"}, "")
 	testutil.PublishTestEvent(t, router, raw)
@@ -115,7 +115,7 @@ func TestStatsJSONUnavailable(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/stats", nil)
-	NewRouter(client).ServeHTTP(recorder, request)
+	mustNewRouter(t, client).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
@@ -131,7 +131,7 @@ func TestStatsJSONUnavailable(t *testing.T) {
 func TestHealthzJSON(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	NewRouter(nil).ServeHTTP(recorder, request)
+	mustNewRouter(t, nil).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
@@ -162,7 +162,7 @@ func TestHealthzReportsUnavailableNode(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
@@ -187,7 +187,7 @@ func TestHealthzReportsHealthyNode(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 	recorder := httptest.NewRecorder()
-	NewRouter(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
@@ -203,14 +203,14 @@ func TestHealthzReportsHealthyNode(t *testing.T) {
 
 func TestCORSMiddleware(t *testing.T) {
 	preflight := httptest.NewRecorder()
-	NewRouter(nil).ServeHTTP(preflight, httptest.NewRequest(http.MethodOptions, "/events", nil))
+	mustNewRouter(t, nil).ServeHTTP(preflight, httptest.NewRequest(http.MethodOptions, "/events", nil))
 
 	if preflight.Code != http.StatusNoContent {
 		t.Fatalf("preflight status = %d, want %d", preflight.Code, http.StatusNoContent)
 	}
 
 	get := httptest.NewRecorder()
-	NewRouter(nil).ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	mustNewRouter(t, nil).ServeHTTP(get, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	for _, recorder := range []*httptest.ResponseRecorder{preflight, get} {
 		if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "*" {
@@ -233,7 +233,7 @@ func TestEventsSurviveRouterRestart(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cfg := config.Default()
 	cfg.EventsDBPath = dbPath
-	router := NewRouterWithOptions(ctx, nil, cfg)
+	router := mustRouter(t, ctx, nil, cfg)
 	resp := testutil.PublishTestEvent(t, router, raw)
 	if resp.Code != http.StatusCreated {
 		t.Fatalf("publish status = %d, want %d", resp.Code, http.StatusCreated)
@@ -247,7 +247,7 @@ func TestEventsSurviveRouterRestart(t *testing.T) {
 	cancel()
 
 	// A new router over the same database file simulates a process restart.
-	router2 := NewRouterWithOptions(context.Background(), nil, cfg)
+	router2 := mustRouter(t, context.Background(), nil, cfg)
 	recorder := httptest.NewRecorder()
 	recorder.Body.Reset()
 	req := httptest.NewRequest(http.MethodGet, "/events/"+created.ID, nil)
@@ -255,4 +255,22 @@ func TestEventsSurviveRouterRestart(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("get after restart status = %d, want %d", recorder.Code, http.StatusOK)
 	}
+}
+
+func mustNewRouter(t *testing.T, client *ipfs.Client) http.Handler {
+	t.Helper()
+	router, err := NewRouter(client)
+	if err != nil {
+		t.Fatalf("NewRouter: %v", err)
+	}
+	return router
+}
+
+func mustRouter(t *testing.T, ctx context.Context, client *ipfs.Client, cfg config.Config) http.Handler {
+	t.Helper()
+	router, err := NewRouterWithOptions(ctx, client, cfg)
+	if err != nil {
+		t.Fatalf("NewRouterWithOptions: %v", err)
+	}
+	return router
 }

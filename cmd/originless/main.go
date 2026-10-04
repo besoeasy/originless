@@ -56,9 +56,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	handler, err := server.NewRouterWithOptions(ctx, client, cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 	httpServer := &http.Server{
 		Addr:              ":" + port,
-		Handler:           server.NewRouterWithOptions(ctx, client, cfg),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       0,
 		WriteTimeout:      0,

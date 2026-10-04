@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/besoeasy/originless/internal/config"
@@ -66,9 +68,16 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // NewRouter builds a router with the default configuration. It is convenient
-// for tests and for callers that do not need to tune anything.
-func NewRouter(client *ipfs.Client) http.Handler {
-	return NewRouterWithOptions(context.Background(), client, config.Default())
+// for tests and for callers that do not need to tune anything. The event
+// database goes to a unique temporary file so tests never collide.
+func NewRouter(client *ipfs.Client) (http.Handler, error) {
+	dir, err := os.MkdirTemp("", "originless-events-")
+	if err != nil {
+		return nil, err
+	}
+	cfg := config.Default()
+	cfg.EventsDBPath = filepath.Join(dir, "events.db")
+	return NewRouterWithOptions(context.Background(), client, cfg)
 }
 
 // NewRouterWithOptions builds the router.
@@ -76,18 +85,11 @@ func NewRouter(client *ipfs.Client) http.Handler {
 // ctx bounds the lifetime of background work, so cancelling it stops the
 // expired-event reaper. Expired events are never served; the reaper only
 // reclaims their memory.
-func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) http.Handler {
+func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) (http.Handler, error) {
 	mux := http.NewServeMux()
-	var store *events.Store
-	if cfg.EventsDBPath != "" {
-		var err error
-		store, err = events.NewPersistentStore(cfg.EventsDBPath, cfg.MaxEvents)
-		if err != nil {
-			log.Printf("events: cannot open %q, falling back to memory-only store: %v", cfg.EventsDBPath, err)
-			store = events.NewStoreWithLimit(cfg.MaxEvents)
-		}
-	} else {
-		store = events.NewStoreWithLimit(cfg.MaxEvents)
+	store, err := events.NewStoreAt(cfg.EventsDBPath, cfg.MaxEvents)
+	if err != nil {
+		return nil, err
 	}
 	store.StartReaper(ctx, events.ReapInterval)
 	go func() {
@@ -104,7 +106,7 @@ func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.C
 	mux.Handle("/events", events.NewHandler(store))
 	mux.Handle("/events/", events.NewHandler(store))
 	mux.HandleFunc("/healthz", healthzHandler(client))
-	return corsMiddleware(mux)
+	return corsMiddleware(mux), nil
 }
 
 // healthzHandler reports liveness of both the app and the IPFS node it depends

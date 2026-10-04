@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/besoeasy/originless/internal/events"
 )
 
 // Defaults for the environment-driven settings.
@@ -27,8 +29,8 @@ type Config struct {
 	// evicted once the limit is reached. This is the same class of bound as
 	// the per-event size and TTL limits, not an access control.
 	MaxEvents int
-	// EventsDBPath is where signed events are persisted in SQLite. Empty
-	// means memory-only: events do not survive restarts.
+	// EventsDBPath is where signed events are persisted in SQLite. It always
+	// has a working value; there is no memory-only mode.
 	EventsDBPath string
 }
 
@@ -38,6 +40,7 @@ func Default() Config {
 	return Config{
 		UploadTmpDir: DefaultUploadTmpDir,
 		MaxEvents:    DefaultMaxEvents,
+		EventsDBPath: events.DefaultDBPath,
 	}
 }
 
@@ -57,10 +60,6 @@ func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 			return Config{}, fmt.Errorf("invalid MAX_EVENTS %q: must be a positive integer", value)
 		}
 		cfg.MaxEvents = maxEvents
-	}
-
-	if value, ok := getenv("EVENTS_DB_PATH"); ok {
-		cfg.EventsDBPath = strings.TrimSpace(value)
 	}
 
 	return cfg, nil
