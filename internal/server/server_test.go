@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/ipfs"
 	"github.com/besoeasy/originless/internal/testutil"
 )
@@ -220,5 +222,37 @@ func TestCORSMiddleware(t *testing.T) {
 		if got := recorder.Header().Get("Access-Control-Allow-Headers"); got != "*" {
 			t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, "*")
 		}
+	}
+}
+
+func TestEventsSurviveRouterRestart(t *testing.T) {
+	dbPath := t.TempDir() + "/events.db"
+	now := time.Now().Truncate(time.Second)
+	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-5, now.Unix()+3600, "chat", map[string]any{"message": "persisted"}, []string{}, "")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cfg := config.Default()
+	cfg.EventsDBPath = dbPath
+	router := NewRouterWithOptions(ctx, nil, cfg)
+	resp := testutil.PublishTestEvent(t, router, raw)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("publish status = %d, want %d", resp.Code, http.StatusCreated)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil || created.ID == "" {
+		t.Fatalf("decode publish response: %v", err)
+	}
+	cancel()
+
+	// A new router over the same database file simulates a process restart.
+	router2 := NewRouterWithOptions(context.Background(), nil, cfg)
+	recorder := httptest.NewRecorder()
+	recorder.Body.Reset()
+	req := httptest.NewRequest(http.MethodGet, "/events/"+created.ID, nil)
+	router2.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("get after restart status = %d, want %d", recorder.Code, http.StatusOK)
 	}
 }

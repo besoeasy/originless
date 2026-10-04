@@ -18,7 +18,7 @@ docker run -d --name originless -p 3232:3232 -e STORAGE_MAX=20GB ghcr.io/besoeas
 
 Open the dashboard at [http://localhost:3232](http://localhost:3232).
 
-The container has no volume mount. Its IPFS repository lives in the container filesystem, so stopping the container preserves its writable layer, while removing the container deletes that data.
+The container has no volume mount. Its IPFS repository and events database live in the container filesystem, so stopping the container preserves its writable layer, while removing the container deletes that data. To keep them across container replacement, mount a volume at `/data`.
 
 ```bash
 docker logs -f originless
@@ -34,6 +34,7 @@ docker rm originless
 | `PORT` | `3232` | HTTP port inside the container. |
 | `IPFS_API_URL` | `http://127.0.0.1:5001` | Kubo RPC endpoint. |
 | `MAX_EVENTS` | `10000` | In-memory event cap. The oldest live events are evicted once it is reached. |
+| `EVENTS_DB_PATH` | `/data/events.db` (container); unset disables persistence | SQLite file where signed events are kept across restarts. |
 | `UPLOAD_TMPDIR` | *system temp* | Directory multipart uploads are spooled to. The free space is checked before the body is read. |
 
 Automatic garbage collection is enabled at a fixed **90%** watermark and runs hourly. `STORAGE_MAX` is the only storage setting exposed as a Docker environment variable. Because uploads are unpinned, a CID may become unavailable after garbage collection.

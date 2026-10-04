@@ -27,6 +27,9 @@ type Config struct {
 	// evicted once the limit is reached. This is the same class of bound as
 	// the per-event size and TTL limits, not an access control.
 	MaxEvents int
+	// EventsDBPath is where signed events are persisted in SQLite. Empty
+	// means memory-only: events do not survive restarts.
+	EventsDBPath string
 }
 
 // Default returns the configuration used when nothing is set in the
@@ -56,10 +59,14 @@ func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 		cfg.MaxEvents = maxEvents
 	}
 
+	if value, ok := getenv("EVENTS_DB_PATH"); ok {
+		cfg.EventsDBPath = strings.TrimSpace(value)
+	}
+
 	return cfg, nil
 }
 
 // Describe renders the settings, for the startup log line.
 func (c Config) Describe() string {
-	return fmt.Sprintf("max_events=%d upload_tmpdir=%q", c.MaxEvents, c.UploadTmpDir)
+	return fmt.Sprintf("max_events=%d upload_tmpdir=%q events_db=%q", c.MaxEvents, c.UploadTmpDir, c.EventsDBPath)
 }

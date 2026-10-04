@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 const (
@@ -122,6 +125,8 @@ type Store struct {
 	maxEvents int
 	// evicted counts events dropped because the store was full.
 	evicted int
+	// db is the durable backing store. Nil means memory-only.
+	db *sql.DB
 }
 
 func NewStore() *Store {
@@ -139,17 +144,129 @@ func NewStoreWithLimit(maxEvents int) *Store {
 	}
 }
 
-func (s *Store) insert(event *Event, now time.Time) (bool, string) {
+// NewPersistentStore opens (creating if needed) a SQLite database at path and
+// returns a store whose events survive restarts. Live, unexpired events are
+// loaded into memory at open; every insert, eviction and reap is mirrored to
+// the database so the two never disagree. Expired rows are purged at open.
+func NewPersistentStore(path string, maxEvents int) (*Store, error) {
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
+	if err != nil {
+		return nil, fmt.Errorf("open events database: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS events (
+		id         TEXT PRIMARY KEY,
+		created_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL,
+		data       TEXT NOT NULL
+	)`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create events table: %w", err)
+	}
+	store := &Store{
+		events:      make(map[string]*Event),
+		subscribers: make(map[*eventSubscriber]struct{}),
+		maxEvents:   maxEvents,
+		db:          db,
+	}
+	now := time.Now()
+	if _, err := db.Exec(`DELETE FROM events WHERE expires_at <= ?`, now.Unix()); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("purge expired events: %w", err)
+	}
+	rows, err := db.Query(`SELECT data FROM events`)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("load events: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("load events: %w", err)
+		}
+		var event Event
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			log.Printf("events: skipping corrupt row: %v", err)
+			continue
+		}
+		if event.ExpiresAt <= now.Unix() {
+			continue
+		}
+		store.events[event.ID] = &event
+	}
+	if err := rows.Err(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("load events: %w", err)
+	}
+	// Enforce the cap on load: keep the newest events.
+	if maxEvents > 0 && len(store.events) > maxEvents {
+		keep := make([]*Event, 0, len(store.events))
+		for _, event := range store.events {
+			keep = append(keep, event)
+		}
+		sort.Slice(keep, func(i, j int) bool {
+			if keep[i].CreatedAt != keep[j].CreatedAt {
+				return keep[i].CreatedAt > keep[j].CreatedAt
+			}
+			return keep[i].ID > keep[j].ID
+		})
+		for _, event := range keep[maxEvents:] {
+			delete(store.events, event.ID)
+			if err := store.dbDelete(event.ID); err != nil {
+				db.Close()
+				return nil, fmt.Errorf("trim events: %w", err)
+			}
+		}
+	}
+	return store, nil
+}
+
+// Close releases the database handle. It is a no-op for memory-only stores.
+func (s *Store) Close() error {
+	if s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
+func (s *Store) dbInsert(event *Event) error {
+	if s.db == nil {
+		return nil
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`INSERT OR IGNORE INTO events (id, created_at, expires_at, data) VALUES (?, ?, ?, ?)`,
+		event.ID, event.CreatedAt, event.ExpiresAt, data)
+	return err
+}
+
+func (s *Store) dbDelete(id string) error {
+	if s.db == nil {
+		return nil
+	}
+	_, err := s.db.Exec(`DELETE FROM events WHERE id = ?`, id)
+	return err
+}
+
+func (s *Store) insert(event *Event, now time.Time) (bool, string, error) {
 	s.mu.Lock()
 	if existing, ok := s.events[event.ID]; ok {
 		storedAt := existing.StoredAt
 		s.mu.Unlock()
-		return false, storedAt
+		return false, storedAt, nil
 	}
 
 	s.evictLocked(now)
 	stored := cloneEvent(event)
 	stored.StoredAt = now.UTC().Format(time.RFC3339)
+	if err := s.dbInsert(stored); err != nil {
+		s.mu.Unlock()
+		return false, "", fmt.Errorf("persist event: %w", err)
+	}
 	s.events[stored.ID] = stored
 	subscribers := make([]*eventSubscriber, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
@@ -166,7 +283,7 @@ func (s *Store) insert(event *Event, now time.Time) (bool, string) {
 			}
 		}
 	}
-	return true, stored.StoredAt
+	return true, stored.StoredAt, nil
 }
 
 // get returns a live event by ID. Expired events are never served.
@@ -231,6 +348,9 @@ func (s *Store) purgeExpiredLocked(now int64) int {
 	for id, event := range s.events {
 		if event.ExpiresAt <= now {
 			delete(s.events, id)
+			if err := s.dbDelete(id); err != nil {
+				log.Printf("events: persist eviction of %s: %v", id, err)
+			}
 			removed++
 		}
 	}
@@ -325,6 +445,9 @@ func (s *Store) evictLocked(now time.Time) {
 			return
 		}
 		delete(s.events, victim)
+		if err := s.dbDelete(victim); err != nil {
+			log.Printf("events: persist eviction of %s: %v", victim, err)
+		}
 		removed++
 	}
 	s.evicted += removed
@@ -809,7 +932,11 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, storedAt := h.store.insert(event, time.Now())
+	created, storedAt, err := h.store.insert(event, time.Now())
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "cannot store event"})
+		return
+	}
 	status := http.StatusCreated
 	response := map[string]any{"status": "success", "id": event.ID, "stored_at": storedAt}
 	if !created {

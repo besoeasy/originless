@@ -78,8 +78,24 @@ func NewRouter(client *ipfs.Client) http.Handler {
 // reclaims their memory.
 func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) http.Handler {
 	mux := http.NewServeMux()
-	store := events.NewStoreWithLimit(cfg.MaxEvents)
+	var store *events.Store
+	if cfg.EventsDBPath != "" {
+		var err error
+		store, err = events.NewPersistentStore(cfg.EventsDBPath, cfg.MaxEvents)
+		if err != nil {
+			log.Printf("events: cannot open %q, falling back to memory-only store: %v", cfg.EventsDBPath, err)
+			store = events.NewStoreWithLimit(cfg.MaxEvents)
+		}
+	} else {
+		store = events.NewStoreWithLimit(cfg.MaxEvents)
+	}
 	store.StartReaper(ctx, events.ReapInterval)
+	go func() {
+		<-ctx.Done()
+		if err := store.Close(); err != nil {
+			log.Printf("events: closing database: %v", err)
+		}
+	}()
 	mux.HandleFunc("/", serveIndex)
 	mux.Handle("/stats", &statsHandler{client: client, events: store})
 	mux.Handle("/up", &uploadHandler{client: client, cfg: cfg})

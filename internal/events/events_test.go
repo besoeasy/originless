@@ -494,3 +494,74 @@ func TestEventStoreBroadcastsToMatchingSubscriber(t *testing.T) {
 		t.Fatal("timed out waiting for broadcast event")
 	}
 }
+
+func TestPersistentStoreSurvivesReopen(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/events.db"
+
+	now := time.Now().Truncate(time.Second)
+	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-5, now.Unix()+3600, "chat", map[string]any{"message": "durable"}, []string{}, "")
+	event, err := validateEvent(raw, now)
+	if err != nil {
+		t.Fatalf("validateEvent: %v", err)
+	}
+
+	store, err := NewPersistentStore(path, 0)
+	if err != nil {
+		t.Fatalf("NewPersistentStore: %v", err)
+	}
+	if _, _, err := store.insert(event, now); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	reopened, err := NewPersistentStore(path, 0)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+	got, ok := reopened.get(event.ID, now)
+	if !ok {
+		t.Fatal("event missing after reopen")
+	}
+	if got.Collection != "chat" || got.ID != event.ID || got.StoredAt == "" {
+		t.Errorf("reopened event = %+v, want the stored event", got)
+	}
+}
+
+func TestPersistentStoreReapsExpiredRows(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/events.db"
+
+	now := time.Now().Truncate(time.Second)
+	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-7200, now.Unix()-3600, "chat", map[string]any{"message": "old"}, []string{}, "")
+	event, err := validateEvent(raw, now.Add(-7200*time.Second))
+	if err != nil {
+		t.Fatalf("validateEvent: %v", err)
+	}
+
+	store, err := NewPersistentStore(path, 0)
+	if err != nil {
+		t.Fatalf("NewPersistentStore: %v", err)
+	}
+	if _, _, err := store.insert(event, now.Add(-7200*time.Second)); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	reopened, err := NewPersistentStore(path, 0)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer reopened.Close()
+	if _, ok := reopened.get(event.ID, now); ok {
+		t.Error("expired event served after reopen")
+	}
+	if stats := reopened.Stats(now); stats.Total != 0 {
+		t.Errorf("total = %d, want 0 after expired rows are purged", stats.Total)
+	}
+}
