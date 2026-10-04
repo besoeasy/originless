@@ -22,12 +22,22 @@ echo "originless: storage max=$STORAGE_MAX, GC watermark=$STORAGE_GC_WATERMARK%,
 
 ipfs daemon --enable-gc &
 ipfs_pid=$!
+app_pid=""
 
 cleanup() {
 	kill -TERM "$ipfs_pid" 2>/dev/null || true
 }
 
-trap cleanup TERM INT
+# Forward container stop signals to both children so the Go app runs its
+# graceful shutdown (cancel ctx, close the event DB, drain HTTP handlers).
+on_signal() {
+	if [ -n "$app_pid" ]; then
+		kill -TERM "$app_pid" 2>/dev/null || true
+	fi
+	kill -TERM "$ipfs_pid" 2>/dev/null || true
+}
+
+trap on_signal TERM INT
 
 # Wait for Kubo's HTTP RPC before starting the application. Kubo rejects GET
 # requests on its API, so use an empty POST to the version endpoint.
