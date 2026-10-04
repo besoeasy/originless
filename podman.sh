@@ -77,7 +77,11 @@ echo "==> building $IMAGE_NAME (version $VERSION) with $PODMAN_BIN..."
 	"$SCRIPT_DIR"
 
 echo "==> starting $CONTAINER_NAME"
-if [[ "$HOST" == "0.0.0.0" || "$HOST" == "::" ]]; then
+if [[ "$HOST" == *":"* ]]; then
+	echo "invalid HOST: $HOST (IPv6 literals are not supported; use 0.0.0.0 or an IPv4 address)" >&2
+	exit 1
+fi
+if [[ "$HOST" == "0.0.0.0" ]]; then
 	echo "    local:   http://127.0.0.1:${PORT}"
 	LAN="$(lan_address)"
 	if [[ -n "$LAN" ]]; then
