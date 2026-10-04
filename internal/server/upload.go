@@ -120,17 +120,10 @@ func (h *uploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// spoolDir returns the directory multipart parts are written to, creating it
-// when configured. An empty UPLOAD_TMPDIR means the system temporary directory.
+// spoolDir returns the directory multipart parts are written to: the system
+// temporary directory, which the container's filesystem always provides.
 func (h *uploadHandler) spoolDir() (string, error) {
-	dir := strings.TrimSpace(h.cfg.UploadTmpDir)
-	if dir == "" {
-		return os.TempDir(), nil
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", err
-	}
-	return dir, nil
+	return os.TempDir(), nil
 }
 
 func parseUploadFiles(r *http.Request, maxBytes int64, spoolDir string) (files []ipfs.UploadFile, totalBytes int64, err error) {

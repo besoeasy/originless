@@ -2,7 +2,7 @@
 set -u
 
 IPFS_REPO="${IPFS_PATH:-/data/ipfs}"
-IPFS_API_URL="${IPFS_API_URL:-http://127.0.0.1:5001}"
+IPFS_API_URL="http://127.0.0.1:5001"
 STORAGE_MAX="${STORAGE_MAX:-20GB}"
 # These GC policy values are intentionally fixed and cannot be overridden.
 STORAGE_GC_WATERMARK=90

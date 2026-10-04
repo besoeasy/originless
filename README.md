@@ -47,9 +47,7 @@ docker rm originless
 | --- | --- | --- |
 | `STORAGE_MAX` | `20GB` | Human-readable soft limit for the Kubo repository. |
 | `PORT` | `3232` | HTTP port inside the container. |
-| `IPFS_API_URL` | `http://127.0.0.1:5001` | Kubo RPC endpoint. |
 | `MAX_EVENTS` | `10000` | Event cap across the SQLite store. The oldest live events are evicted once it is reached. |
-| `UPLOAD_TMPDIR` | *system temp* | Directory multipart uploads are spooled to. The free space is checked before the body is read. |
 | `SYNC_NODES` | *none* | Comma-separated base URLs of peer Originless nodes to federate with. |
 
 ## Syncing between two Originless nodes

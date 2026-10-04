@@ -94,7 +94,7 @@ echo "==> press Ctrl-C to stop and remove the container"
 # -e NAME without a value copies from the host environment and leaves the
 # image default in place when the host does not define it.
 pass_env=()
-for var in STORAGE_MAX MAX_EVENTS UPLOAD_TMPDIR SYNC_NODES; do
+for var in STORAGE_MAX MAX_EVENTS SYNC_NODES; do
 	if [[ -n "${!var:-}" ]]; then
 		pass_env+=(-e "$var")
 	fi

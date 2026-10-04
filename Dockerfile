@@ -39,7 +39,6 @@ COPY entry.sh /app/entrypoint.sh
 
 ENV IPFS_PATH=/data/ipfs \
     PORT=3232 \
-    IPFS_API_URL=http://127.0.0.1:5001 \
     STORAGE_MAX=20GB
 
 # Only the Originless web UI is exposed. IPFS swarm and RPC ports remain internal.

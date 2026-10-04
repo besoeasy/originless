@@ -47,7 +47,7 @@ func main() {
 	}
 	log.Printf("originless: settings %s", cfg.Describe())
 
-	client, err := ipfs.NewClient(os.Getenv("IPFS_API_URL"))
+	client, err := ipfs.NewClient("http://127.0.0.1:5001")
 	if err != nil {
 		log.Fatal(err)
 	}

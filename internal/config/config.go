@@ -17,14 +17,11 @@ import (
 // Defaults for the environment-driven settings.
 const (
 	DefaultMaxEvents    = 10000
-	DefaultUploadTmpDir = ""
 )
 
-// Config holds every tunable setting.
+// Config holds every tunable setting. The IPFS endpoint and upload
+// spool directory are fixed: the app always runs beside its Kubo daemon.
 type Config struct {
-	// UploadTmpDir is where multipart parts are spooled. Empty means the
-	// system temporary directory.
-	UploadTmpDir string
 	// MaxEvents bounds in-memory event growth. The oldest live events are
 	// evicted once the limit is reached. This is the same class of bound as
 	// the per-event size and TTL limits, not an access control.
@@ -41,7 +38,6 @@ type Config struct {
 // environment.
 func Default() Config {
 	return Config{
-		UploadTmpDir: DefaultUploadTmpDir,
 		MaxEvents:    DefaultMaxEvents,
 		EventsDBPath: events.DefaultDBPath,
 	}
@@ -52,10 +48,6 @@ func Default() Config {
 // rules can be tested without mutating the process environment.
 func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 	cfg := Default()
-
-	if value, ok := getenv("UPLOAD_TMPDIR"); ok {
-		cfg.UploadTmpDir = strings.TrimSpace(value)
-	}
 
 	if value, ok := getenv("MAX_EVENTS"); ok && strings.TrimSpace(value) != "" {
 		maxEvents, err := strconv.Atoi(strings.TrimSpace(value))
@@ -83,5 +75,5 @@ func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 
 // Describe renders the settings, for the startup log line.
 func (c Config) Describe() string {
-	return fmt.Sprintf("max_events=%d upload_tmpdir=%q events_db=%q sync_nodes=%d", c.MaxEvents, c.UploadTmpDir, c.EventsDBPath, len(c.SyncNodes))
+	return fmt.Sprintf("max_events=%d events_db=%q sync_nodes=%d", c.MaxEvents, c.EventsDBPath, len(c.SyncNodes))
 }
