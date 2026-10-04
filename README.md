@@ -1,12 +1,27 @@
 # Originless
 
-Originless is a single-container backend for real-time web applications. It combines a small Go HTTP service with an embedded [Kubo](https://github.com/ipfs/kubo) IPFS node, so signed events and content-addressed files share one deployment.
+Originless is a single-container backend for real-time web applications: a
+small Go HTTP service plus an embedded [Kubo](https://github.com/ipfs/kubo)
+IPFS node, in one image. You get signed, persistent events with live
+server-sent updates, content-addressed file uploads, and optional
+multi-node federation — with no database server, message broker, or account
+system to run.
 
-- **Signed events** — immutable, Ed25519-verified JSON documents with TTL expiry.
-- **Live updates** — Server-Sent Events at `/events/stream`; no WebSocket server required.
-- **IPFS uploads** — files and folders are added with `pin=false` and addressed by CID.
-- **Built-in demos** — a shared 256×256 canvas, chat, event stream, and upload dashboard.
-- **CORS enabled** — browser applications can call the HTTP API from another origin.
+## What you get
+
+- **Signed events** — immutable, Ed25519-verified JSON documents with TTL
+  expiry, persisted in SQLite at `/data/events.db`. Events survive process
+  restarts and are never served after expiry.
+- **Live updates** — Server-Sent Events at `/events/stream`; no WebSocket
+  server required. Reconnecting clients resume from their last event ID.
+- **IPFS uploads** — files and folders are added with `pin=false` and
+  addressed by CID.
+- **Federation** — set `SYNC_NODES` and nodes converge on the same event set
+  over plain HTTP. Only events are synced; IPFS blobs stay per-node.
+- **Built-in demos** — a shared 256×256 canvas, chat, event stream, and
+  upload dashboard, served at `/`.
+- **CORS enabled** — browser applications can call the HTTP API from another
+  origin.
 
 ## Run with Docker
 
@@ -33,7 +48,7 @@ docker rm originless
 | `STORAGE_MAX` | `20GB` | Human-readable soft limit for the Kubo repository. |
 | `PORT` | `3232` | HTTP port inside the container. |
 | `IPFS_API_URL` | `http://127.0.0.1:5001` | Kubo RPC endpoint. |
-| `MAX_EVENTS` | `10000` | In-memory event cap. The oldest live events are evicted once it is reached. |
+| `MAX_EVENTS` | `10000` | Event cap across the SQLite store. The oldest live events are evicted once it is reached. |
 | `UPLOAD_TMPDIR` | *system temp* | Directory multipart uploads are spooled to. The free space is checked before the body is read. |
 | `SYNC_NODES` | *none* | Comma-separated base URLs of peer Originless nodes to federate with. |
 
@@ -51,6 +66,10 @@ Each node pulls `GET /events?since=...` from its peers, re-verifies every
 signature, and dedupes by event ID, so the two converge on the union of both
 event sets. Like every other part of Originless there is no authentication —
 expose the API only on networks you trust.
+
+Only events are synced. IPFS uploads stay on the node that accepted them,
+and each node has its own `/data/events.db` — sync keeps the *contents*
+converged, not the files on disk.
 
 To keep the IPFS repository and the events database across container
 replacement, mount a volume at `/data`:
