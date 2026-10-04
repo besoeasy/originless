@@ -624,14 +624,20 @@ func (f eventFilter) matches(event *Event) bool {
 	return true
 }
 
+// ErrInvalidEvent marks failures that will never succeed on retry (bad
+// signature, malformed shape, already expired). Callers may skip the event
+// and advance past it; any other Accept error is transient and retryable.
+var ErrInvalidEvent = errors.New("invalid event")
+
 // Accept verifies (signature, expiry window, size) and stores an event
 // received from a peer. It returns whether the event is new and its ID.
 // Verification is identical to a client publish, so a peer cannot inject
-// forged events.
+// forged events. Validation failures are wrapped in ErrInvalidEvent; a
+// persistence failure means the event was not stored and may be retried.
 func (s *Store) Accept(raw []byte, now time.Time) (bool, string, error) {
 	event, err := validateEvent(raw, now)
 	if err != nil {
-		return false, "", err
+		return false, "", fmt.Errorf("%w: %v", ErrInvalidEvent, err)
 	}
 	created, _, err := s.insert(event, now)
 	if err != nil {

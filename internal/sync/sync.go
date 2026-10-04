@@ -11,6 +11,7 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -155,12 +156,18 @@ func (s *Syncer) pullPage(ctx context.Context, peer string, since int64, cursor 
 			continue
 		}
 		created, _, err := s.store.Accept(raw, time.Now())
-		if err != nil {
-			log.Printf("sync: rejecting event %s from %s: %v", event.ID, peer, err)
-			continue
-		}
-		if created {
-			imported++
+		switch {
+		case err == nil:
+			if created {
+				imported++
+			}
+		case errors.Is(err, events.ErrInvalidEvent):
+			// Forged or malformed: skip it forever; the cursor may pass it.
+			log.Printf("sync: skipping invalid event %s from %s: %v", event.ID, peer, err)
+		default:
+			// Persistence failure: retry next round. The cursor must not pass
+			// this event, so abort the round without advancing past it.
+			return imported, newest, "", fmt.Errorf("importing event %s: %w", event.ID, err)
 		}
 		if event.CreatedAt > newest {
 			newest = event.CreatedAt
