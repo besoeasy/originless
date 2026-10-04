@@ -45,9 +45,8 @@ docker rm originless
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `STORAGE_MAX` | `20GB` | Human-readable soft limit for the Kubo repository. |
+| `STORAGE_MAX` | `20GB` | Human-readable soft limit for the Kubo repository. Stored events are capped at a fifth of this value; beyond that the oldest live events are evicted. |
 | `PORT` | `3232` | HTTP port inside the container. |
-| `MAX_EVENTS` | `10000` | Event cap across the SQLite store. The oldest live events are evicted once it is reached. |
 | `SYNC_NODES` | *none* | Comma-separated base URLs of peer Originless nodes to federate with. |
 
 ## Syncing between two Originless nodes

@@ -89,7 +89,7 @@ func NewRouter(client *ipfs.Client) (http.Handler, error) {
 // reclaims their memory.
 func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) (http.Handler, error) {
 	mux := http.NewServeMux()
-	store, err := events.NewStoreAt(cfg.EventsDBPath, cfg.MaxEvents)
+	store, err := events.NewStoreAt(cfg.EventsDBPath, cfg.MaxEventBytes)
 	if err != nil {
 		return nil, err
 	}

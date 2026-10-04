@@ -13,7 +13,7 @@ import (
 type statsResponse struct {
 	ipfs.IPFSStats
 	Events events.EventStats `json:"events"`
-	// Evicted counts events dropped because MAX_EVENTS was reached.
+	// Evicted counts events dropped because the event byte budget was hit.
 	Evicted int `json:"events_evicted"`
 }
 

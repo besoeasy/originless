@@ -123,8 +123,10 @@ type Store struct {
 	mu          sync.Mutex
 	events      map[string]*Event
 	subscribers map[*eventSubscriber]struct{}
-	// maxEvents bounds in-memory growth. Zero means unbounded.
-	maxEvents int
+	// maxBytes bounds the total size of stored events. Zero means unbounded.
+	maxBytes int64
+	// liveBytes is the sum of stored event sizes for live events.
+	liveBytes int64
 	// evicted counts events dropped because the store was full.
 	evicted int
 	// db is the durable backing store.
@@ -137,17 +139,17 @@ type Store struct {
 // app always runs in a container that owns /data, so this is safe.
 const DefaultDBPath = "/data/events.db"
 
-// NewStore opens the default events database and returns a store that keeps
-// at most maxEvents live events.
-func NewStore(maxEvents int) (*Store, error) {
-	return NewStoreAt(DefaultDBPath, maxEvents)
+// NewStore opens the default events database and returns a store whose
+// stored events are bounded by maxBytes. Zero means unbounded.
+func NewStore(maxBytes int64) (*Store, error) {
+	return NewStoreAt(DefaultDBPath, maxBytes)
 }
 
 // NewStoreAt opens (creating if needed) a SQLite database at path and
 // returns a store whose events survive restarts. Live, unexpired events are
 // loaded into memory at open; every insert, eviction and reap is mirrored to
 // the database so the two never disagree. Expired rows are purged at open.
-func NewStoreAt(path string, maxEvents int) (*Store, error) {
+func NewStoreAt(path string, maxBytes int64) (*Store, error) {
 	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, fmt.Errorf("open events database: %w", err)
@@ -165,7 +167,7 @@ func NewStoreAt(path string, maxEvents int) (*Store, error) {
 	store := &Store{
 		events:      make(map[string]*Event),
 		subscribers: make(map[*eventSubscriber]struct{}),
-		maxEvents:   maxEvents,
+		maxBytes:    maxBytes,
 		db:          db,
 		path:        path,
 	}
@@ -195,13 +197,14 @@ func NewStoreAt(path string, maxEvents int) (*Store, error) {
 			continue
 		}
 		store.events[event.ID] = &event
+		store.liveBytes += event.Size
 	}
 	if err := rows.Err(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("load events: %w", err)
 	}
-	// Enforce the cap on load: keep the newest events.
-	if maxEvents > 0 && len(store.events) > maxEvents {
+	// Enforce the byte budget on load: keep the newest events.
+	if maxBytes > 0 && store.liveBytes > maxBytes {
 		keep := make([]*Event, 0, len(store.events))
 		for _, event := range store.events {
 			keep = append(keep, event)
@@ -212,8 +215,11 @@ func NewStoreAt(path string, maxEvents int) (*Store, error) {
 			}
 			return keep[i].ID > keep[j].ID
 		})
-		for _, event := range keep[maxEvents:] {
+		// Drop the oldest events until the store is back under budget.
+		for i := len(keep) - 1; i >= 0 && store.liveBytes > maxBytes; i-- {
+			event := keep[i]
 			delete(store.events, event.ID)
+			store.liveBytes -= event.Size
 			if err := store.dbDelete(event.ID); err != nil {
 				db.Close()
 				return nil, fmt.Errorf("trim events: %w", err)
@@ -259,6 +265,7 @@ func (s *Store) insert(event *Event, now time.Time) (bool, string, error) {
 		return false, "", fmt.Errorf("persist event: %w", err)
 	}
 	s.events[stored.ID] = stored
+	s.liveBytes += stored.Size
 	subscribers := make([]*eventSubscriber, 0, len(s.subscribers))
 	for subscriber := range s.subscribers {
 		subscribers = append(subscribers, subscriber)
@@ -339,6 +346,7 @@ func (s *Store) purgeExpiredLocked(now int64) int {
 	for id, event := range s.events {
 		if event.ExpiresAt <= now {
 			delete(s.events, id)
+			s.liveBytes -= event.Size
 			if err := s.dbDelete(id); err != nil {
 				log.Printf("events: persist eviction of %s: %v", id, err)
 			}
@@ -409,17 +417,14 @@ func (s *Store) replayAfter(anchorID string, filter eventFilter, now time.Time) 
 	return events, true
 }
 
-// evictLocked drops the oldest live events until there is room for one more.
+// evictLocked drops the oldest live events until the backing bytes fit.
 // Callers must hold s.mu. Expired events are dropped first and for free.
 func (s *Store) evictLocked(now time.Time) {
-	if s.maxEvents <= 0 {
-		return
-	}
-	if len(s.events) < s.maxEvents {
+	if s.maxBytes <= 0 {
 		return
 	}
 	removed := s.purgeExpiredLocked(now.Unix())
-	for len(s.events) >= s.maxEvents {
+	for s.liveBytes > s.maxBytes && len(s.events) > 0 {
 		victim := ""
 		first := true
 		for id, event := range s.events {
@@ -435,6 +440,7 @@ func (s *Store) evictLocked(now time.Time) {
 		if victim == "" {
 			return
 		}
+		s.liveBytes -= s.events[victim].Size
 		delete(s.events, victim)
 		if err := s.dbDelete(victim); err != nil {
 			log.Printf("events: persist eviction of %s: %v", victim, err)
@@ -443,7 +449,7 @@ func (s *Store) evictLocked(now time.Time) {
 	}
 	s.evicted += removed
 	if removed > 0 {
-		log.Printf("events: store full at %d events, evicted %d oldest event(s)", s.maxEvents, removed)
+		log.Printf("events: store full at %d live bytes, evicted %d oldest event(s)", s.maxBytes, removed)
 	}
 }
 
