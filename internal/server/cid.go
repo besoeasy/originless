@@ -16,6 +16,14 @@ type cidHandler struct {
 	client *ipfs.Client
 }
 
+// isMissingBlockError reports whether a Kubo block/stat failure means the
+// content simply is not on this node. Kubo reports missing blocks with a 500
+// whose message carries the cause, so the message has to be inspected.
+func isMissingBlockError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not found") || strings.Contains(msg, "key does not exist") || strings.Contains(msg, "blockservice: key not found")
+}
+
 const maxCIDContentBytes = 1 << 20
 
 type cidResponse struct {
@@ -52,7 +60,7 @@ func (h *cidHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	block, err := h.client.BlockStat(ctx, cid)
 	if err != nil {
 		var apiErr *ipfs.StatusError
-		if errors.As(err, &apiErr) {
+		if errors.As(err, &apiErr) && (apiErr.StatusCode() == http.StatusNotFound || isMissingBlockError(err)) {
 			response.Available = false
 			response.Error = "content unavailable on this node"
 			log.Printf("IPFS block stat reported unavailable for %s: %v", cid, err)
