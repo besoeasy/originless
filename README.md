@@ -64,6 +64,10 @@ signature, and dedupes by event ID, so the two converge on the union of both
 event sets. Like every other part of Originless there is no authentication —
 expose the API only on networks you trust.
 
+Federation note: sync checkpoints on `created_at`, so client clocks should be
+roughly in step and `created_at` should be "now" — events backdated far
+beyond the 15-minute drift window are not guaranteed to sync between nodes.
+
 Only events are synced. IPFS uploads stay on the node that accepted them,
 and each node has its own `/data/events.db` — sync keeps the *contents*
 converged, not the files on disk.

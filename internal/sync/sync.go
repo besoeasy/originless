@@ -26,10 +26,13 @@ import (
 // DefaultInterval is how often peers are polled.
 const DefaultInterval = 5 * time.Second
 
-// overlap seconds are re-fetched on every round to absorb clock skew and
-// events that a peer stored just as we checkpointed. Dedupe by ID makes the
-// redundancy cheap.
-const overlap = 3 * 60
+// overlap seconds are re-fetched on every round. It must be at least the
+// server-side future-drift bound (events.MaxCreatedDrift, 15 minutes): a
+// peer may accept an event whose created_at is up to that far in the
+// future, and such an event must still fall inside the next round's
+// refetch window or it would be permanently skipped. Dedupe by ID makes
+// the redundancy cheap.
+const overlap = 15 * 60
 
 // maxPages bounds a single sync round so a misbehaving peer cannot pin the
 // loop; the next round continues from the updated checkpoint.
