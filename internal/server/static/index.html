@@ -613,7 +613,7 @@
             <li><span class="verdict-good">✓</span><span><strong>One Single Binary:</strong> Zero-dependency Go container running on a $4/mo VPS, Raspberry Pi, Umbrel, Docker, or laptop.</span></li>
             <li><span class="verdict-good">✓</span><span><strong>Client-Side Cryptography:</strong> Ed25519 keypairs generated on-device in 2 lines of code. The key is the identity; zero server auth state.</span></li>
             <li><span class="verdict-good">✓</span><span><strong>Native Real-Time (SSE):</strong> Instant Server-Sent Events (<code>/events/stream</code>) supported natively in every browser without socket libraries.</span></li>
-            <li><span class="verdict-good">✓</span><span><strong>Autonomous Self-Cleaning &amp; P2P:</strong> Automatic TTL record pruning, unpinned IPFS content reclaimed by garbage collection, and Kademlia DHT swarm sync.</span></li>
+            <li><span class="verdict-good">✓</span><span><strong>Autonomous Self-Cleaning:</strong> Automatic TTL record pruning and unpinned IPFS content reclaimed by garbage collection keeps every node lean.</span></li>
           </ul>
         </div>
       </div>
@@ -659,6 +659,49 @@
           <p>Single-port HTTP/WS multiplexing, AutoNAT hole punching, Kademlia DHT discovery, and O(1) commutative XOR state root fast-path sync across nodes worldwide.</p>
           <p class="replaces"><strong>Replaces:</strong> Nostr Relays, Matrix Homeservers, BitTorrent</p>
         </div>
+      </div>
+    </section>
+
+    <section id="federation">
+      <p class="eyebrow"><span class="marker">[*]</span> Federation</p>
+      <h2 class="section-title reveal">Two nodes, one event log.</h2>
+      <p class="lede reveal">Point two Originless containers at each other with <code>SYNC_NODES</code> and they converge on the same set of signed events — no broker, no extra infra.</p>
+      <div class="panel reveal">
+        <ul class="tick-list">
+          <li><span class="verdict-good">✓</span><span><strong>Plain HTTP pull:</strong> every 5s each node fetches <code>GET /events?since=...</code> from its peers and imports what it lacks.</span></li>
+          <li><span class="verdict-good">✓</span><span><strong>Verified, not trusted:</strong> imported events are re-validated with the same Ed25519 signature check as a fresh publish; forged events are dropped.</span></li>
+          <li><span class="verdict-good">✓</span><span><strong>Resumable:</strong> each node stores its per-peer checkpoint in SQLite, so a restart continues where it left off.</span></li>
+          <li><span class="verdict-good">✓</span><span><strong>Events only:</strong> state you share is the signed event log — IPFS blobs stay on the node that accepted them.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="persistence">
+      <p class="eyebrow"><span class="marker">[*]</span> Persistence</p>
+      <h2 class="section-title reveal">State that survives restarts.</h2>
+      <p class="lede reveal">Everything important lives under <code>/data</code> in the container filesystem: a SQLite events database plus the embedded Kubo repository.</p>
+      <div class="panel reveal">
+        <pre style="overflow-x:auto; font-size:0.8rem;"><code>/data
+├── events.db        # SQLite: signed events + sync checkpoints
+└── ipfs/            # Kubo repository (blocks, pins, config)</code></pre>
+        <p class="body-text" style="margin-top:1rem;">Mount a volume at <code>/data</code> to keep state across container replacement. Stored events are capped at a fifth of <code>STORAGE_MAX</code>; beyond that, the oldest live events are evicted. TTL-expired events are never served and are reaped hourly.</p>
+      </div>
+    </section>
+
+    <section id="quickstart">
+      <p class="eyebrow"><span class="marker">[*]</span> Quickstart</p>
+      <h2 class="section-title reveal">Publish, stream, upload — in three commands.</h2>
+      <div class="panel reveal">
+        <pre style="overflow-x:auto; font-size:0.8rem;"><code># 1. Upload a file, get back a CID
+curl -F "file=@hello.txt" http://localhost:3232/up
+
+# 2. Publish a signed event (see docs/api.md for the signing recipe)
+curl -X POST http://localhost:3232/events \
+  -H "Content-Type: application/json" \
+  -d '{"owner":"ed25519:...","collection":"chat","created_at":...,"expires_at":...,"data":{...},"labels":[],"sig":"..."}'
+
+# 3. Watch events arrive, filtered by collection
+curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       </div>
     </section>
 
