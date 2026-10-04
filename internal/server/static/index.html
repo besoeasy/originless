@@ -564,8 +564,8 @@
         <div class="feature reveal">
           <span class="marker">[*]</span>
           <div>
-            <p class="feature-name">Ephemeral by design</p>
-            <p class="feature-desc">No volumes, no migrations, no state to back up. The container holds its data in its own filesystem; <code>--rm</code> wipes it clean.</p>
+            <p class="feature-name">Zero dependencies</p>
+            <p class="feature-desc">No external database or broker: events persist in SQLite and files sit in the embedded Kubo node. State survives restarts, and <code>--rm</code> still wipes it clean.</p>
           </div>
         </div>
       </div>
@@ -582,7 +582,7 @@
         <p class="eyebrow" style="margin-bottom:0.75rem;"><span class="marker">[*]</span> Diagnostics</p>
         <dl class="diag-grid">
           <div><dt>Status</dt><dd id="node-diag-status">Checking…</dd></div>
-          <div><dt>Storage</dt><dd>Ephemeral · in-container</dd></div>
+          <div><dt>Storage</dt><dd>SQLite + IPFS · in-container</dd></div>
           <div><dt>Engine</dt><dd id="node-diag-version">Kubo IPFS</dd></div>
           <div><dt>Events</dt><dd id="node-diag-events">—</dd></div>
           <div><dt>Event range</dt><dd id="node-diag-range">—</dd></div>
@@ -874,7 +874,7 @@
         <a href="#api">API reference</a>
       </nav>
     </div>
-    <p class="footer-bottom">© 2026 Originless · Ephemeral by design — no data leaves your container unless you publish it.</p>
+    <p class="footer-bottom">© 2026 Originless · Events persist in-container on SQLite; nothing leaves the box unless you publish it.</p>
   </footer>
 
   <div id="toast-container" class="toast-container"></div>
