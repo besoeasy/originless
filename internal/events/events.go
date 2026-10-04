@@ -723,6 +723,9 @@ func validateEvent(raw []byte, now time.Time) (*Event, error) {
 	if createdAt > now.Unix()+MaxCreatedDrift {
 		return nil, fmt.Errorf("created_at is too far in the future")
 	}
+	if expiresAt <= now.Unix() {
+		return nil, fmt.Errorf("event is already expired")
+	}
 
 	canonicalData, err := canonicalJSON(input.Data)
 	if err != nil {

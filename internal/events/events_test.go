@@ -102,10 +102,18 @@ func TestSignedEventLifecycle(t *testing.T) {
 // reaper reclaims them rather than being deleted by a read.
 func TestExpiredEventsAreNeverServed(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
-	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()-1, "chat", map[string]any{"message": "expired"}, []string{}, "")
+	past := now.Add(-2 * time.Hour)
+	raw, _ := testutil.MakeSignedEvent(t, past.Unix(), past.Unix()+3600, "chat", map[string]any{"message": "expired"}, []string{}, "")
 	store := newTestStore(t)
 	handler := NewHandler(store)
-	publishedID := eventIDFromResponse(t, publishTestEvent(t, handler, raw))
+	event, err := validateEvent(raw, past)
+	if err != nil {
+		t.Fatalf("validate event: %v", err)
+	}
+	if _, _, err := store.insert(event, past); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	publishedID := event.ID
 
 	for _, path := range []string{
 		"/events",
@@ -141,12 +149,13 @@ func TestExpiredEventsAreNeverServed(t *testing.T) {
 func TestStoreReaperRemovesExpiredEvents(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Now().Truncate(time.Second)
-	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-100, now.Unix()-1, "chat", map[string]any{"message": "expired"}, []string{}, "")
-	event, err := validateEvent(raw, now)
+	past := now.Add(-2 * time.Hour)
+	raw, _ := testutil.MakeSignedEvent(t, past.Unix(), past.Unix()+3600, "chat", map[string]any{"message": "expired"}, []string{}, "")
+	event, err := validateEvent(raw, past)
 	if err != nil {
 		t.Fatalf("validate event: %v", err)
 	}
-	store.insert(event, now)
+	store.insert(event, past)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
