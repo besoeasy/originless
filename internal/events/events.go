@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -115,6 +116,7 @@ type EventStats struct {
 	NewestCreatedAt int64                 `json:"newest_created_at,omitempty"`
 	Subscribers     int                   `json:"subscribers"`
 	MaxSubscribers  int                   `json:"max_subscribers"`
+	DBBytes         int64                 `json:"db_bytes"`
 }
 
 type Store struct {
@@ -127,6 +129,8 @@ type Store struct {
 	evicted int
 	// db is the durable backing store.
 	db *sql.DB
+	// path is the database file, used for size reporting.
+	path string
 }
 
 // DefaultDBPath is where events are persisted when nothing overrides it. The
@@ -163,6 +167,7 @@ func NewStoreAt(path string, maxEvents int) (*Store, error) {
 		subscribers: make(map[*eventSubscriber]struct{}),
 		maxEvents:   maxEvents,
 		db:          db,
+		path:        path,
 	}
 	now := time.Now()
 	if _, err := db.Exec(`DELETE FROM events WHERE expires_at <= ?`, now.Unix()); err != nil {
@@ -503,6 +508,11 @@ func (s *Store) Stats(now time.Time) EventStats {
 		}
 	}
 	stats.UniqueOwners = len(owners)
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if info, err := os.Stat(s.path + suffix); err == nil {
+			stats.DBBytes += info.Size()
+		}
+	}
 	for collection, count := range collections {
 		stats.TopCollections = append(stats.TopCollections, eventCollectionStat{Collection: collection, Count: count})
 	}

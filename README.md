@@ -36,6 +36,15 @@ docker rm originless
 | `MAX_EVENTS` | `10000` | In-memory event cap. The oldest live events are evicted once it is reached. |
 | `UPLOAD_TMPDIR` | *system temp* | Directory multipart uploads are spooled to. The free space is checked before the body is read. |
 
+To keep the IPFS repository and the events database across container
+replacement, mount a volume at `/data`:
+
+```bash
+podman run -d --name originless -p 127.0.0.1:3232:3232 \
+  -v originless-data:/data \
+  ghcr.io/besoeasy/originless:latest
+```
+
 Automatic garbage collection is enabled at a fixed **90%** watermark and runs hourly. `STORAGE_MAX` is the only storage setting exposed as a Docker environment variable. Because uploads are unpinned, a CID may become unavailable after garbage collection.
 
 ### Access control
