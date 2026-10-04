@@ -45,12 +45,18 @@ reclaimed yet. Expired events are never served by any read.
     ],
     "top_labels": [{"label": "room:lobby", "count": 2}],
     "stored_bytes": 2048,
+    "oldest_created_at": 1758420000,
+    "newest_created_at": 1758420100,
     "subscribers": 1,
-    "max_subscribers": 256
+    "max_subscribers": 256,
+    "db_bytes": 40960
   },
   "events_evicted": 0
 }
 ```
+
+`events_evicted` counts events dropped because the event byte budget
+(`STORAGE_MAX`/5) was exceeded; TTL expiry is not counted there.
 
 ## `GET /healthz`
 
@@ -104,7 +110,7 @@ Send an `application/json` event body:
 }
 ```
 
-The optional `blob` field is retained for compatibility with the original event schema; new binary content should use the IPFS CIDs returned by `/up` or `/upf`. A new event returns `201 Created`; replaying the same signed event returns `200 OK` with `duplicate: true`.
+The optional `blob` field is retained for compatibility with the original event schema; new binary content should use the IPFS CIDs returned by `/up` or `/upf`. A new event returns `201 Created` with body `{"status":"success","id":"...","stored_at":"..."}`; replaying the same signed event returns `200 OK` with `duplicate: true`.
 
 ### `GET /events`
 

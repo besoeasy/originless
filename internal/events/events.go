@@ -423,7 +423,8 @@ func (s *Store) evictLocked(now time.Time) {
 	if s.maxBytes <= 0 {
 		return
 	}
-	removed := s.purgeExpiredLocked(now.Unix())
+	removed := 0
+	s.purgeExpiredLocked(now.Unix())
 	for s.liveBytes > s.maxBytes && len(s.events) > 0 {
 		victim := ""
 		first := true
