@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/events"
 	"github.com/besoeasy/originless/internal/ipfs"
+	"github.com/besoeasy/originless/internal/sync"
 )
 
 const requestTimeout = 5 * time.Second
@@ -92,6 +94,11 @@ func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.C
 		return nil, err
 	}
 	store.StartReaper(ctx, events.ReapInterval)
+	if len(cfg.SyncNodes) > 0 {
+		syncer := sync.New(store, cfg.SyncNodes, sync.DefaultInterval)
+		go syncer.Run(ctx)
+		log.Printf("sync: federating with %d peer(s): %s", len(cfg.SyncNodes), strings.Join(cfg.SyncNodes, ", "))
+	}
 	go func() {
 		<-ctx.Done()
 		if err := store.Close(); err != nil {

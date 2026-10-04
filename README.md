@@ -35,6 +35,22 @@ docker rm originless
 | `IPFS_API_URL` | `http://127.0.0.1:5001` | Kubo RPC endpoint. |
 | `MAX_EVENTS` | `10000` | In-memory event cap. The oldest live events are evicted once it is reached. |
 | `UPLOAD_TMPDIR` | *system temp* | Directory multipart uploads are spooled to. The free space is checked before the body is read. |
+| `SYNC_NODES` | *none* | Comma-separated base URLs of peer Originless nodes to federate with. |
+
+## Syncing between two Originless nodes
+
+Set `SYNC_NODES` on each node to the other's base URL and the two exchange
+events over plain HTTP every 5 seconds:
+
+```bash
+podman run -d --name o1 -p 127.0.0.1:3233:3232 -e SYNC_NODES=http://localhost:3234 ghcr.io/besoeasy/originless:latest
+podman run -d --name o2 -p 127.0.0.1:3234:3232 -e SYNC_NODES=http://localhost:3233 ghcr.io/besoeasy/originless:latest
+```
+
+Each node pulls `GET /events?since=...` from its peers, re-verifies every
+signature, and dedupes by event ID, so the two converge on the union of both
+event sets. Like every other part of Originless there is no authentication —
+expose the API only on networks you trust.
 
 To keep the IPFS repository and the events database across container
 replacement, mount a volume at `/data`:

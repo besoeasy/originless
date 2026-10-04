@@ -593,6 +593,45 @@ func (f eventFilter) matches(event *Event) bool {
 	return true
 }
 
+// Accept verifies (signature, expiry window, size) and stores an event
+// received from a peer. It returns whether the event is new and its ID.
+// Verification is identical to a client publish, so a peer cannot inject
+// forged events.
+func (s *Store) Accept(raw []byte, now time.Time) (bool, string, error) {
+	event, err := validateEvent(raw, now)
+	if err != nil {
+		return false, "", err
+	}
+	created, _, err := s.insert(event, now)
+	if err != nil {
+		return false, "", err
+	}
+	return created, event.ID, nil
+}
+
+// SyncRecordInput rebuilds the publishable form of an event received from a
+// peer, so it can be re-verified and stored locally. The server-assigned
+// fields (id, stored_at, size) are dropped: the local server recomputes id
+// and stored_at, and validation re-checks the signature and expiry window.
+func SyncRecordInput(event *Event) ([]byte, error) {
+	if event == nil {
+		return nil, fmt.Errorf("nil event")
+	}
+	payload := map[string]any{
+		"owner":      event.Owner,
+		"collection": event.Collection,
+		"created_at": event.CreatedAt,
+		"expires_at": event.ExpiresAt,
+		"data":       event.Data,
+		"labels":     event.Labels,
+		"sig":        event.Sig,
+	}
+	if event.Blob != "" {
+		payload["blob"] = event.Blob
+	}
+	return json.Marshal(payload)
+}
+
 func validateEvent(raw []byte, now time.Time) (*Event, error) {
 	if len(raw) > MaxEventSize {
 		return nil, fmt.Errorf("event too large: %d > %d", len(raw), MaxEventSize)
