@@ -12,7 +12,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/ipfs"
 )
 
@@ -38,7 +37,6 @@ type uploadResponse struct {
 
 type uploadHandler struct {
 	client *ipfs.Client
-	cfg    config.Config
 	folder bool
 }
 
