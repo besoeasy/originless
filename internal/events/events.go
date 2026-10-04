@@ -1060,7 +1060,14 @@ func (h *Handler) stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// A wedged client (stuck TCP, full kernel buffers) must not pin this
+	// handler forever: every write gets a deadline, and a failed write ends
+	// the stream. Keepalive traffic keeps the connection observable.
+	rc := http.NewResponseController(w)
 	writeFrame := func(frame []byte) bool {
+		if err := rc.SetWriteDeadline(time.Now().Add(2 * sseKeepaliveInterval)); err != nil && err != http.ErrNotSupported {
+			return false
+		}
 		if _, err := w.Write(frame); err != nil {
 			return false
 		}
