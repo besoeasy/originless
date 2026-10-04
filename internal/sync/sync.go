@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/besoeasy/originless/internal/events"
@@ -43,9 +42,6 @@ type Syncer struct {
 	peers    []string
 	interval time.Duration
 	client   *http.Client
-
-	mu      sync.Mutex
-	cursors map[string]int64
 }
 
 func New(store *events.Store, peers []string, interval time.Duration) *Syncer {
@@ -57,7 +53,6 @@ func New(store *events.Store, peers []string, interval time.Duration) *Syncer {
 		peers:    append([]string{}, peers...),
 		interval: interval,
 		client:   &http.Client{Timeout: 10 * time.Second},
-		cursors:  make(map[string]int64),
 	}
 }
 
@@ -85,9 +80,10 @@ func (s *Syncer) SyncOnce(ctx context.Context) {
 }
 
 func (s *Syncer) pullFrom(ctx context.Context, peer string) error {
-	s.mu.Lock()
-	cursor := s.cursors[peer]
-	s.mu.Unlock()
+	cursor, err := s.store.SyncCursor(peer)
+	if err != nil {
+		return fmt.Errorf("read sync cursor: %w", err)
+	}
 
 	since := int64(0)
 	if cursor > overlap {
@@ -95,7 +91,6 @@ func (s *Syncer) pullFrom(ctx context.Context, peer string) error {
 	}
 	newest := cursor
 	next := ""
-	var err error
 	for page := 0; ; page++ {
 		var pageNewest int64
 		var checkpoint string
@@ -109,9 +104,9 @@ func (s *Syncer) pullFrom(ctx context.Context, peer string) error {
 		next = checkpoint
 	}
 	if newest > cursor && err == nil {
-		s.mu.Lock()
-		s.cursors[peer] = newest
-		s.mu.Unlock()
+		if setErr := s.store.SetSyncCursor(peer, newest); setErr != nil {
+			return fmt.Errorf("store sync cursor: %w", setErr)
+		}
 	}
 	return err
 }

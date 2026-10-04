@@ -164,6 +164,13 @@ func NewStoreAt(path string, maxBytes int64) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("create events table: %w", err)
 	}
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS peer_cursors (
+		peer            TEXT PRIMARY KEY,
+		last_created_at INTEGER NOT NULL
+	)`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create peer cursors table: %w", err)
+	}
 	store := &Store{
 		events:      make(map[string]*Event),
 		subscribers: make(map[*eventSubscriber]struct{}),
@@ -232,6 +239,23 @@ func NewStoreAt(path string, maxBytes int64) (*Store, error) {
 // Close releases the database handle.
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+// SyncCursor returns the newest created_at already imported from peer.
+func (s *Store) SyncCursor(peer string) (int64, error) {
+	var cursor int64
+	err := s.db.QueryRow(`SELECT last_created_at FROM peer_cursors WHERE peer = ?`, peer).Scan(&cursor)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return cursor, err
+}
+
+// SetSyncCursor records the newest created_at imported from peer.
+func (s *Store) SetSyncCursor(peer string, cursor int64) error {
+	_, err := s.db.Exec(`INSERT INTO peer_cursors (peer, last_created_at) VALUES (?, ?)
+		ON CONFLICT(peer) DO UPDATE SET last_created_at = excluded.last_created_at`, peer, cursor)
+	return err
 }
 
 func (s *Store) dbInsert(event *Event) error {
