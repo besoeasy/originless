@@ -101,9 +101,38 @@ func (c *Client) RepoStats(ctx context.Context) (IPFSStats, error) {
 		return IPFSStats{}, fmt.Errorf("IPFS API returned %s: %s", resp.Status, message)
 	}
 
-	var stats IPFSStats
-	if err := json.Unmarshal(body, &stats); err != nil {
+	return decodeRepoStats(body)
+}
+
+// repoStatWire is what Kubo's /api/v0/stats/repo actually returns:
+// RepoSize and StorageMax are top-level fields. The nested SizeStat form
+// is accepted too so older or proxied responses keep working.
+type repoStatWire struct {
+	NumObjects uint64  `json:"NumObjects"`
+	RepoSize   *uint64 `json:"RepoSize"`
+	StorageMax *uint64 `json:"StorageMax"`
+	SizeStat   *struct {
+		RepoSize   uint64 `json:"RepoSize"`
+		StorageMax uint64 `json:"StorageMax"`
+	} `json:"SizeStat"`
+}
+
+func decodeRepoStats(body []byte) (IPFSStats, error) {
+	var wire repoStatWire
+	if err := json.Unmarshal(body, &wire); err != nil {
 		return IPFSStats{}, fmt.Errorf("decode IPFS stats response: %w", err)
+	}
+	var stats IPFSStats
+	stats.NumObjects = wire.NumObjects
+	if wire.SizeStat != nil {
+		stats.SizeStat.RepoSize = wire.SizeStat.RepoSize
+		stats.SizeStat.StorageMax = wire.SizeStat.StorageMax
+	}
+	if wire.RepoSize != nil {
+		stats.SizeStat.RepoSize = *wire.RepoSize
+	}
+	if wire.StorageMax != nil {
+		stats.SizeStat.StorageMax = *wire.StorageMax
 	}
 	return stats, nil
 }
