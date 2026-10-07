@@ -88,7 +88,7 @@
     #overview > .eyebrow { display: flex; justify-content: center; }
     #overview > .lede { margin-left: auto; margin-right: auto; text-align: center; margin-bottom: 2rem; }
     #overview > .dash-status { justify-content: center; margin-bottom: 2rem; }
-    .hero-cta { display: flex; justify-content: center; margin-bottom: 2rem; }
+    .hero-cta { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 2rem; }
 
     .status-pill {
       display: inline-flex;
@@ -149,20 +149,52 @@
     .btn-primary:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); color: #fff; }
     a.button.btn-primary:hover:not(:disabled) { background: var(--color-accent-hover); border-color: var(--color-accent-hover); color: #fff; }
 
-    /* GitHub-style button: light gray, dark text, 6px radius */
-    a.button.btn-github, button.btn-github {
-      background: var(--color-bg-surface);
-      color: var(--color-text);
-      border-color: var(--color-border);
-      border-radius: 6px;
-      box-shadow: 0 1px 0 rgba(29, 29, 31, 0.06);
+    /* GitHub "Star" split button, modelled on github.com's Primer btn-sm + Counter */
+    .gh-star {
+      display: inline-flex;
+      align-items: stretch;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      font-size: 0.875rem;
       font-weight: 500;
-    }
-    a.button.btn-github:hover:not(:disabled), button.btn-github:hover:not(:disabled) {
-      background: #e9e9ee;
-      color: var(--color-text);
-      border-color: var(--color-border);
+      line-height: 1.25rem;
+      color: #24292f;
       text-decoration: none;
+      border-radius: 6px;
+      box-shadow: 0 1px 0 rgba(31, 35, 40, 0.04);
+      transition: transform 0.08s ease-in-out;
+    }
+    .gh-star:hover { text-decoration: none; }
+    .gh-star:active { transform: scale(0.98); }
+    .gh-star:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
+    .gh-star > span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3125rem 1rem;
+      background: #f6f8fa;
+      border: 1px solid rgba(31, 35, 40, 0.15);
+      transition: background-color 0.2s cubic-bezier(0.3, 0, 0.5, 1), border-color 0.2s cubic-bezier(0.3, 0, 0.5, 1);
+    }
+    .gh-star:hover > span { background: #eaeef2; border-color: rgba(31, 35, 40, 0.15); }
+    .gh-star:active > span { background: #e2e6ea; }
+    .gh-star-main { border-radius: 6px; }
+    .gh-star.has-count .gh-star-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+    .gh-star-count {
+      margin-left: -1px;
+      padding: 0.3125rem 0.75rem !important;
+      border-radius: 0 6px 6px 0;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .gh-star-count[hidden] { display: none !important; }
+    .gh-star svg { flex-shrink: 0; fill: currentColor; }
+    .gh-star .gh-icon-star { color: #656d76; }
+    .gh-star:hover .gh-icon-star { color: #e3b341; }
+    .gh-star-repo { color: #656d76; font-weight: 400; }
+    .gh-star-repo strong { color: #24292f; font-weight: 600; }
+    .gh-star-divider { width: 1px; align-self: stretch; background: rgba(31, 35, 40, 0.15); }
+    @media (max-width: 36rem) {
+      .gh-star-repo, .gh-star-divider { display: none; }
     }
     .btn-secondary, .btn-dark, .btn-gradient, .btn-outline-blue, .btn-sm {
       padding: 0.5rem 0.75rem;
@@ -178,6 +210,7 @@
     #apps .marker { color: var(--color-success-text); }
     #storage .marker { color: var(--color-teal); }
     #api .marker { color: var(--color-orange); }
+    #node .marker { color: var(--color-text-muted); }
 
     .eyebrow {
       font-size: 0.8125rem;
@@ -193,6 +226,7 @@
       margin-bottom: 1.5rem;
       user-select: none;
       text-align: center;
+      text-transform: uppercase;
     }
     .hero-spell span {
       display: inline-block;
@@ -231,18 +265,81 @@
     .install-body .prompt { color: var(--color-text-muted); user-select: none; }
 
     /* ---------- stats (opencode.ai fig row) ---------- */
-    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--color-border-muted); border: 1px solid var(--color-border-muted); border-radius: var(--radius-lg); overflow: hidden; }
-    .stat-cell { background: var(--color-bg); padding: 1.75rem; border-top: 3px solid transparent; transition: background 0.2s ease; }
-    .stat-cell:nth-child(1) { border-top-color: var(--color-accent); }
-    .stat-cell:nth-child(2) { border-top-color: var(--color-purple); }
-    .stat-cell:nth-child(3) { border-top-color: var(--color-success-text); }
-    .stat-cell:nth-child(4) { border-top-color: var(--color-orange); }
-    .stat-cell:nth-child(5) { border-top-color: var(--color-teal); }
-    .stat-cell:nth-child(6) { border-top-color: var(--color-danger); }
-    .stat-cell:hover { background: var(--color-bg-surface); }
-    .stat-label { font-size: 0.8125rem; color: var(--color-text-muted); margin-bottom: 0.5rem; }
-    .stat-value { font-size: 2.25rem; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1.1; }
-    .stat-sub { font-size: 0.75rem; color: var(--color-text-muted); margin-top: 0.5rem; }
+    /* Neutral cards: color is reserved for state (ok / warn / danger), never
+       decoration. Cards are not clickable, so they do not lift on hover.
+       A card or meter opts into a state via .is-ok / .is-warn / .is-danger. */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .stat-cell {
+      --stat-color: var(--color-text-muted);
+      --stat-tint: var(--color-bg-surface);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      padding: 1.5rem;
+      background: var(--color-bg);
+      border: 1px solid var(--color-border-muted);
+      border-radius: var(--radius-lg);
+    }
+    .is-ok { --stat-color: var(--color-success-text); --stat-tint: var(--color-success-bg); }
+    .is-warn { --stat-color: var(--color-warning-text); --stat-tint: var(--color-warning-bg); }
+    .is-danger { --stat-color: var(--color-danger-text); --stat-tint: #fdeeee; }
+
+    .stat-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
+    .stat-label { font-size: 0.8125rem; font-weight: 500; color: var(--color-text-secondary); }
+    .stat-tag {
+      font-size: 0.6875rem;
+      font-weight: 500;
+      color: var(--stat-color);
+      background: var(--stat-tint);
+      border-radius: 999px;
+      padding: 0.15rem 0.55rem;
+      white-space: nowrap;
+    }
+
+    .node-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+    .node-head .lede { margin-bottom: 0; }
+    .node-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+    .node-panels .panel { box-shadow: none; border-color: var(--color-border-muted); }
+
+    /* One-line node summary in the hero */
+    .hero-summary { display: inline-flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; justify-content: center; white-space: normal; text-align: center; }
+    .hero-summary .sep { color: var(--color-border); }
+    .hero-summary a { font-size: 0.6875rem; font-weight: 500; }
+    .stat-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.05;
+      overflow-wrap: anywhere;
+    }
+    .stat-sub {
+      margin-top: auto;
+      padding-top: 1rem;
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+    }
+    .stat-sub span { color: var(--color-text-secondary); }
+    .stat-tag[hidden] { display: none; }
+    .stat-meter {
+      height: 4px;
+      margin-top: 1rem;
+      border-radius: 999px;
+      background: var(--color-border-muted);
+      overflow: hidden;
+    }
+    .stat-meter > span {
+      display: block;
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: var(--stat-color);
+      transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .stat-meter.is-unbounded > span {
+      width: 100%;
+      background: repeating-linear-gradient(90deg, var(--color-border) 0 6px, transparent 6px 12px);
+    }
 
     /* ---------- feature list with [*] markers ---------- */
     .feature-list { margin: 2.5rem 0 0; border-top: 1px solid var(--color-border-muted); }
@@ -468,6 +565,7 @@
     @media (max-width: 56rem) {
       .grid-2 { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .node-panels { grid-template-columns: 1fr; }
       .footer-inner { grid-template-columns: 1fr; }
     }
     @media (max-width: 36rem) {
@@ -496,49 +594,29 @@
       <p class="lede">The universal backend for building apps. Collapse sprawling cloud microservices into two primitives — Signed Events and IPFS content. Build full-featured real-time apps in pure vanilla HTML and JavaScript with zero backend boilerplate.</p>
 
       <div class="hero-cta">
-        <a class="button btn-github" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer">★ Star on GitHub — besoeasy/originless</a>
+        <a class="gh-star" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer" aria-label="Star besoeasy/originless on GitHub">
+          <span class="gh-star-main">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
+            <span class="gh-star-repo">besoeasy/<strong>originless</strong></span>
+            <span class="gh-star-divider" aria-hidden="true"></span>
+            <svg class="gh-icon-star" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z"></path></svg>
+            Star
+          </span>
+          <span class="gh-star-count" data-gh-stars hidden></span>
+        </a>
       </div>
 
       <div class="dash-status">
-        <span class="status-pill" id="container-status-badge">
+        <span class="status-pill hero-summary" id="container-status-badge">
           <span class="pulse-dot" id="health-pulse"></span>
-          <span id="health-text">Checking…</span>
-          <span id="ping-text"></span>
+          <span><span id="health-text">Checking…</span> <span id="ping-text"></span></span>
+          <span class="sep" aria-hidden="true">|</span>
+          <span><span id="hero-events">—</span> events</span>
+          <span class="sep" aria-hidden="true">|</span>
+          <span id="hero-storage">—</span>
+          <span class="sep" aria-hidden="true">|</span>
+          <a href="#node">Node status ↓</a>
         </span>
-        <button id="refresh" class="btn-sm" type="button" title="Refresh stats">Refresh stats</button>
-      </div>
-
-      <div class="stats-grid" aria-live="polite">
-        <div class="stat-cell reveal">
-          <p class="stat-label">Repository size</p>
-          <div class="stat-value" id="repo-size">—</div>
-          <p class="stat-sub"><span id="storage-pct">—</span> · Limit: <span id="storage-limit">—</span></p>
-        </div>
-        <div class="stat-cell reveal">
-          <p class="stat-label">IPFS objects</p>
-          <div class="stat-value" id="objects">—</div>
-          <p class="stat-sub">Local UnixFS blocks</p>
-        </div>
-        <div class="stat-cell reveal">
-          <p class="stat-label">Live events</p>
-          <div class="stat-value" id="event-count">—</div>
-          <p class="stat-sub"><span id="event-bytes">—</span> · <span id="event-total">—</span> stored · <span id="event-db">—</span> on disk</p>
-        </div>
-        <div class="stat-cell reveal">
-          <p class="stat-label">Unique signers</p>
-          <div class="stat-value" id="event-owners">—</div>
-          <p class="stat-sub">Ed25519 client identities</p>
-        </div>
-        <div class="stat-cell reveal">
-          <p class="stat-label">Stream subscribers</p>
-          <div class="stat-value" id="event-subscribers">—</div>
-          <p class="stat-sub"><span id="event-sub-detail">—</span> SSE sockets</p>
-        </div>
-        <div class="stat-cell reveal">
-          <p class="stat-label">Expired events</p>
-          <div class="stat-value" id="event-expired">—</div>
-          <p class="stat-sub"><span id="event-evicted">—</span> evicted by size budget</p>
-        </div>
       </div>
     </section>
 
@@ -568,26 +646,6 @@
             <p class="feature-desc">No external database or broker: events persist in SQLite and files sit in the embedded Kubo node. State survives restarts, and <code>--rm</code> still wipes it clean.</p>
           </div>
         </div>
-      </div>
-
-      <div class="panel reveal" style="margin-top:2.5rem;">
-        <p class="eyebrow" style="margin-bottom:0.75rem;"><span class="marker">[*]</span> Collections</p>
-        <div id="collections-empty" class="state">Loading collections…</div>
-        <div id="top-collections-pills" class="collections-flex" hidden></div>
-        <p class="eyebrow" style="margin:1.25rem 0 0.75rem;"><span class="marker">[*]</span> Labels</p>
-        <div id="top-labels-pills" class="collections-flex" hidden></div>
-      </div>
-
-      <div class="panel reveal" style="margin-top:1.5rem;">
-        <p class="eyebrow" style="margin-bottom:0.75rem;"><span class="marker">[*]</span> Diagnostics</p>
-        <dl class="diag-grid">
-          <div><dt>Status</dt><dd id="node-diag-status">Checking…</dd></div>
-          <div><dt>Storage</dt><dd>SQLite + IPFS · in-container</dd></div>
-          <div><dt>Engine</dt><dd id="node-diag-version">Kubo IPFS</dd></div>
-          <div><dt>Events</dt><dd id="node-diag-events">—</dd></div>
-          <div><dt>Event range</dt><dd id="node-diag-range">—</dd></div>
-          <div><dt>Health</dt><dd><a href="/healthz" target="_blank">/healthz</a></dd></div>
-        </dl>
       </div>
     </section>
 
@@ -821,6 +879,87 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       </div>
     </section>
 
+    <section id="node">
+      <p class="eyebrow"><span class="marker">[*]</span> This node</p>
+      <div class="node-head">
+        <div>
+          <h2 class="section-title">Node status</h2>
+          <p class="lede">Live numbers from this container. Updates every 30 seconds.</p>
+        </div>
+        <button id="refresh" class="btn-sm" type="button" title="Refresh stats">Refresh now</button>
+      </div>
+
+      <div class="stats-grid" aria-live="polite">
+        <div class="stat-cell">
+          <div class="stat-head">
+            <p class="stat-label">Repository size</p>
+            <span class="stat-tag" id="storage-pct">—</span>
+          </div>
+          <div class="stat-value" id="repo-size">—</div>
+          <div class="stat-meter" id="storage-meter" role="presentation"><span></span></div>
+          <p class="stat-sub" id="storage-limit">—</p>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-head">
+            <p class="stat-label">IPFS objects</p>
+          </div>
+          <div class="stat-value" id="objects">—</div>
+          <p class="stat-sub">Local blocks in the embedded Kubo node</p>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-head">
+            <p class="stat-label">Live events</p>
+            <span class="stat-tag" id="event-total">—</span>
+          </div>
+          <div class="stat-value" id="event-count">—</div>
+          <p class="stat-sub"><span id="event-bytes">—</span> payload · <span id="event-db">—</span> on disk</p>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-head">
+            <p class="stat-label">Unique signers</p>
+          </div>
+          <div class="stat-value" id="event-owners">—</div>
+          <p class="stat-sub">Distinct client identities</p>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-head">
+            <p class="stat-label">Stream subscribers</p>
+          </div>
+          <div class="stat-value" id="event-subscribers">—</div>
+          <div class="stat-meter" id="subs-meter" role="presentation"><span></span></div>
+          <p class="stat-sub"><span id="event-sub-detail">—</span> sockets</p>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-head">
+            <p class="stat-label">Expired events</p>
+          </div>
+          <div class="stat-value" id="event-expired">—</div>
+          <p class="stat-sub"><span id="event-evicted">—</span> evicted by size budget</p>
+        </div>
+      </div>
+
+      <div class="node-panels">
+        <div class="panel">
+          <p class="eyebrow" style="margin-bottom:0.75rem;"><span class="marker">[*]</span> Collections</p>
+          <div id="collections-empty" class="state">Loading collections…</div>
+          <div id="top-collections-pills" class="collections-flex" hidden></div>
+          <p class="eyebrow" style="margin:1.25rem 0 0.75rem;"><span class="marker">[*]</span> Labels</p>
+          <div id="top-labels-pills" class="collections-flex" hidden></div>
+        </div>
+        <div class="panel">
+          <p class="eyebrow" style="margin-bottom:0.75rem;"><span class="marker">[*]</span> Diagnostics</p>
+          <dl class="diag-grid" style="margin-top:0;">
+            <div><dt>Status</dt><dd id="node-diag-status">Checking…</dd></div>
+            <div><dt>Storage</dt><dd>SQLite + IPFS · in-container</dd></div>
+            <div><dt>Engine</dt><dd id="node-diag-version">Kubo IPFS</dd></div>
+            <div><dt>Events</dt><dd id="node-diag-events">—</dd></div>
+            <div><dt>Event range</dt><dd id="node-diag-range">—</dd></div>
+            <div><dt>Health</dt><dd><a href="/healthz" target="_blank">/healthz</a></dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
     <section id="api">
       <p class="eyebrow"><span class="marker">[*]</span> Reference</p>
       <h2 class="section-title reveal">One container, seven routes.</h2>
@@ -890,7 +1029,13 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
         <h2 class="section-title">The Universal Zero-Auth Backend for Modern Apps.</h2>
         <p class="lede" style="margin-left:auto; margin-right:auto; text-align:center;">No accounts. No API keys. No database migrations. Signed events, IPFS content-addressing, native real-time streams, and autonomous P2P replication in a single binary.</p>
         <div class="hero-cta" style="margin-bottom:0;">
-          <a class="button btn-github" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer">★ Star on GitHub</a>
+          <a class="gh-star" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer" aria-label="Star besoeasy/originless on GitHub">
+            <span class="gh-star-main">
+              <svg class="gh-icon-star" aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Zm0 2.445L6.615 5.5a.75.75 0 0 1-.564.41l-3.097.45 2.24 2.184a.75.75 0 0 1 .216.664l-.528 3.084 2.769-1.456a.75.75 0 0 1 .698 0l2.77 1.456-.53-3.084a.75.75 0 0 1 .216-.664l2.24-2.183-3.096-.45a.75.75 0 0 1-.564-.41L8 2.694Z"></path></svg>
+              Star on GitHub
+            </span>
+            <span class="gh-star-count" data-gh-stars hidden></span>
+          </a>
           <a class="button btn-secondary" href="#apps">Try the live demos</a>
         </div>
       </div>
@@ -936,6 +1081,10 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     const repoSize = document.getElementById("repo-size");
     const storageLimit = document.getElementById("storage-limit");
     const storagePct = document.getElementById("storage-pct");
+    const storageMeter = document.getElementById("storage-meter");
+    const subsMeter = document.getElementById("subs-meter");
+    const heroEvents = document.getElementById("hero-events");
+    const heroStorage = document.getElementById("hero-storage");
     const objects = document.getElementById("objects");
     const eventCount = document.getElementById("event-count");
     const eventOwners = document.getElementById("event-owners");
@@ -1126,7 +1275,39 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     }
 
     // Stats Loader
-    async function loadStats() {
+    // Color carries meaning only: under 75% is ok, 75–90% warn, 90%+ danger.
+    const STATE_CLASSES = ["is-ok", "is-warn", "is-danger"];
+    function usageState(pct) {
+      if (pct >= 90) return "is-danger";
+      if (pct >= 75) return "is-warn";
+      return "is-ok";
+    }
+    function setState(el, state) {
+      if (!el) return;
+      el.classList.remove(...STATE_CLASSES);
+      if (state) el.classList.add(state);
+    }
+
+    // Fill a usage bar; null means "no limit" and shows a dashed track.
+    // The bar and its card take the matching ok / warn / danger color.
+    function setMeter(meter, pct) {
+      if (!meter) return;
+      const bar = meter.firstElementChild;
+      const card = meter.closest(".stat-cell");
+      if (pct === null || !Number.isFinite(pct)) {
+        meter.classList.add("is-unbounded");
+        bar.style.width = "";
+        setState(card, null);
+        return;
+      }
+      meter.classList.remove("is-unbounded");
+      setState(card, usageState(pct));
+      // Keep a sliver visible for tiny non-zero usage.
+      const clamped = Math.min(100, Math.max(0, pct));
+      bar.style.width = (clamped > 0 && clamped < 1.5 ? 1.5 : clamped) + "%";
+    }
+
+    async function loadStats({ silent = false } = {}) {
       refreshBtn.disabled = true;
       try {
         const response = await fetch("/stats", {
@@ -1143,10 +1324,15 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
         if (size.StorageMax) {
           const pct = (Number(size.RepoSize) / Number(size.StorageMax)) * 100;
           storagePct.textContent = `${pct.toFixed(pct < 10 ? 1 : 0)}% used`;
-          storageLimit.textContent = formatBytes(size.StorageMax);
+          storagePct.hidden = false;
+          storageLimit.textContent = `of ${formatBytes(size.StorageMax)} limit`;
+          setMeter(storageMeter, pct);
+          if (heroStorage) heroStorage.textContent = `${formatBytes(size.RepoSize)} of ${formatBytes(size.StorageMax)}`;
         } else {
-          storagePct.textContent = "no cap";
-          storageLimit.textContent = "Unlimited";
+          storagePct.hidden = true;
+          storageLimit.textContent = "No storage limit";
+          setMeter(storageMeter, null);
+          if (heroStorage) heroStorage.textContent = `${formatBytes(size.RepoSize)} stored`;
         }
         objects.textContent = Number(data.NumObjects || 0).toLocaleString();
 
@@ -1154,6 +1340,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
         const total = Number(events.total || 0);
         const expired = Number(events.expired || 0);
         eventCount.textContent = count.toLocaleString();
+        if (heroEvents) heroEvents.textContent = count.toLocaleString();
         eventTotal.textContent = `${total.toLocaleString()} total`;
         eventOwners.textContent = Number(events.unique_owners || 0).toLocaleString();
         eventBytes.textContent = formatBytes(events.stored_bytes || 0);
@@ -1164,6 +1351,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
         const maxSubs = Number(events.max_subscribers || 0);
         eventSubscribers.textContent = subs.toLocaleString();
         eventSubDetail.textContent = maxSubs > 0 ? `${subs.toLocaleString()} of ${maxSubs.toLocaleString()} active` : `${subs.toLocaleString()} active`;
+        setMeter(subsMeter, maxSubs > 0 ? (subs / maxSubs) * 100 : null);
 
         if (nodeDiagEvents) nodeDiagEvents.textContent = `${count.toLocaleString()} live / ${total.toLocaleString()} stored · ${expired.toLocaleString()} expired`;
         if (nodeDiagRange) {
@@ -1175,7 +1363,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
         renderTopCollections(events.top_collections || []);
         renderTopLabels(events.top_labels || []);
       } catch (err) {
-        showToast("Stats error: " + err.message);
+        if (!silent) showToast("Stats error: " + err.message);
       } finally {
         refreshBtn.disabled = false;
       }
@@ -1663,6 +1851,28 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       checkHealth();
     });
 
+    // GitHub star count: best effort. The counter stays hidden when the
+    // public API is unreachable (offline node, rate limit), so the button
+    // still reads as a plain "Star" button.
+    async function loadGitHubStars() {
+      const counters = document.querySelectorAll("[data-gh-stars]");
+      if (!counters.length) return;
+      try {
+        const res = await fetch("https://api.github.com/repos/besoeasy/originless", { headers: { Accept: "application/vnd.github+json" } });
+        if (!res.ok) return;
+        const { stargazers_count: stars } = await res.json();
+        if (typeof stars !== "number") return;
+        const label = stars >= 1000 ? (stars / 1000).toFixed(stars >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k" : String(stars);
+        counters.forEach((el) => {
+          el.textContent = label;
+          el.title = stars.toLocaleString() + " stars";
+          el.hidden = false;
+          el.parentElement.classList.add("has-count");
+        });
+      } catch (_) { /* leave the counter hidden */ }
+    }
+
+    loadGitHubStars();
     getCanvasIdentity().catch(() => {});
     loadStats();
     checkHealth();
@@ -1670,7 +1880,10 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     loadChatMessages();
     connectChatStream();
 
-    setInterval(checkHealth, 30000);
+    setInterval(() => {
+      checkHealth();
+      loadStats({ silent: true });
+    }, 30000);
   </script>
 </body>
 </html>
