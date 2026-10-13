@@ -1247,6 +1247,12 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
     }
 
+    function hexToBytes(hex) {
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+      return out;
+    }
+
     function base64ToBytes(value) {
       const binary = atob(value);
       return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -1423,62 +1429,307 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     }
 
 
-    // Web Crypto Ed25519 Identity
+    // Self-contained SHA-256 + Ed25519 (RFC 8032) signer.
+    //
+    // Web Crypto's `crypto.subtle` is only exposed in secure contexts
+    // (HTTPS or localhost). The dashboard is also served over plain HTTP, where
+    // `subtle` is undefined, so we fall back to this small implementation.
+    // It is verified against the RFC 6234 / RFC 8032 test vectors.
+    const FallbackCrypto = (() => {
+      function edConcat(...arrays) {
+        let total = 0;
+        for (const a of arrays) total += a.length;
+        const out = new Uint8Array(total);
+        let offset = 0;
+        for (const a of arrays) { out.set(a, offset); offset += a.length; }
+        return out;
+      }
+
+      function leToBig(bytes) {
+        let value = 0n;
+        for (let i = bytes.length - 1; i >= 0; i--) value = (value << 8n) | BigInt(bytes[i]);
+        return value;
+      }
+
+      function encodeLE32(value) {
+        const out = new Uint8Array(32);
+        for (let i = 0; i < 32; i++) { out[i] = Number(value & 0xffn); value >>= 8n; }
+        return out;
+      }
+
+      const rotr32 = (x, n) => ((x >>> n) | (x << (32 - n))) >>> 0;
+
+      function sha256(input) {
+        const K = [
+          0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+          0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+          0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+          0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+          0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+          0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+          0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+          0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+        ];
+        let H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+        const L = input.length;
+        let P = L + 1;
+        while (P % 64 !== 56) P++;
+        const padded = new Uint8Array(P + 8);
+        padded.set(input);
+        padded[L] = 0x80;
+        const bitLen = L * 8;
+        const view = new DataView(padded.buffer);
+        view.setUint32(P, Math.floor(bitLen / 0x100000000));
+        view.setUint32(P + 4, bitLen >>> 0);
+        const w = new Array(64);
+        for (let off = 0; off < padded.length; off += 64) {
+          for (let i = 0; i < 16; i++) w[i] = view.getUint32(off + i * 4);
+          for (let i = 16; i < 64; i++) {
+            const x = w[i - 15], y = w[i - 2];
+            const s0 = rotr32(x, 7) ^ rotr32(x, 18) ^ (x >>> 3);
+            const s1 = rotr32(y, 17) ^ rotr32(y, 19) ^ (y >>> 10);
+            w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+          }
+          let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+          for (let i = 0; i < 64; i++) {
+            const S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+            const ch = (e & f) ^ (~e & g);
+            const t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+            const S0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+            const maj = (a & b) ^ (a & c) ^ (b & c);
+            const t2 = (S0 + maj) >>> 0;
+            h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+          }
+          const v = [a, b, c, d, e, f, g, h];
+          for (let i = 0; i < 8; i++) H[i] = (H[i] + v[i]) >>> 0;
+        }
+        const out = new Uint8Array(32);
+        const outView = new DataView(out.buffer);
+        for (let i = 0; i < 8; i++) outView.setUint32(i * 4, H[i]);
+        return out;
+      }
+
+      const SHA512_K = (() => {
+        const M64 = (1n << 64n) - 1n;
+        const isqrt = (n) => { if (n < 2n) return n; let x = n, y = (x + 1n) / 2n; while (y < x) { x = y; y = (x + n / x) / 2n; } return x; };
+        const icbrt = (n) => { if (n < 2n) return n; let x = n, y; for (;;) { y = (2n * x + n / (x * x)) / 3n; if (y >= x) return x; x = y; } };
+        const isPrime = (n) => { if (n < 2) return false; for (let i = 2; i * i <= n; i++) if (n % i === 0) return false; return true; };
+        const primes = [];
+        for (let n = 2; primes.length < 80; n++) if (isPrime(n)) primes.push(n);
+        return {
+          K: primes.map((p) => icbrt(BigInt(p) << 192n) & M64),
+          H: primes.slice(0, 8).map((p) => isqrt(BigInt(p) << 128n) & M64),
+          M64
+        };
+      })();
+
+      function sha512(input) {
+        const { K, M64 } = SHA512_K;
+        const rotr = (x, n) => ((x >> n) | (x << (64n - n))) & M64;
+        let H = SHA512_K.H.slice();
+        const L = input.length;
+        let P = L + 1;
+        while (P % 128 !== 112) P++;
+        const padded = new Uint8Array(P + 16);
+        padded.set(input);
+        padded[L] = 0x80;
+        let bitLen = BigInt(L) * 8n;
+        for (let i = 0; i < 16; i++) { padded[P + 15 - i] = Number(bitLen & 0xffn); bitLen >>= 8n; }
+        const w = new Array(80);
+        for (let off = 0; off < padded.length; off += 128) {
+          for (let i = 0; i < 16; i++) {
+            let value = 0n;
+            for (let j = 0; j < 8; j++) value = (value << 8n) | BigInt(padded[off + i * 8 + j]);
+            w[i] = value;
+          }
+          for (let i = 16; i < 80; i++) {
+            const s0 = rotr(w[i - 15], 1n) ^ rotr(w[i - 15], 8n) ^ (w[i - 15] >> 7n);
+            const s1 = rotr(w[i - 2], 19n) ^ rotr(w[i - 2], 61n) ^ (w[i - 2] >> 6n);
+            w[i] = (w[i - 16] + s0 + w[i - 7] + s1) & M64;
+          }
+          let a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+          for (let i = 0; i < 80; i++) {
+            const S1 = rotr(e, 14n) ^ rotr(e, 18n) ^ rotr(e, 41n);
+            const ch = (e & f) ^ (~e & g);
+            const t1 = (h + S1 + ch + K[i] + w[i]) & M64;
+            const S0 = rotr(a, 28n) ^ rotr(a, 34n) ^ rotr(a, 39n);
+            const maj = (a & b) ^ (a & c) ^ (b & c);
+            const t2 = (S0 + maj) & M64;
+            h = g; g = f; f = e; e = (d + t1) & M64; d = c; c = b; b = a; a = (t1 + t2) & M64;
+          }
+          const v = [a, b, c, d, e, f, g, h];
+          for (let i = 0; i < 8; i++) H[i] = (H[i] + v[i]) & M64;
+        }
+        const out = new Uint8Array(64);
+        for (let i = 0; i < 8; i++) {
+          let value = H[i];
+          for (let j = 7; j >= 0; j--) { out[i * 8 + j] = Number(value & 0xffn); value >>= 8n; }
+        }
+        return out;
+      }
+
+      const ED = (() => {
+        const P = (1n << 255n) - 19n;
+        const L = 2n ** 252n + 27742317777372353535851937790883648493n;
+        const mod = (a) => { const r = a % P; return r < 0n ? r + P : r; };
+        const modpow = (b, e, m) => { let r = 1n; b %= m; while (e > 0n) { if (e & 1n) r = r * b % m; b = b * b % m; e >>= 1n; } return r; };
+        const modinv = (a) => modpow(mod(a), P - 2n, P);
+        const d = mod(-121665n * modinv(121666n));
+        const B = [
+          15112221349535400772501151409588531511454012693041857206046113283949847762202n,
+          46316835694926478169428394003475163141307993866256225615783033603165251855960n
+        ];
+        return { P, L, d, B, mod, modinv };
+      })();
+
+      const ED_IDENTITY = [0n, 1n, 1n, 0n];
+
+      function edDouble(q) {
+        const [X1, Y1, Z1] = q;
+        const A = X1 * X1 % ED.P, B = Y1 * Y1 % ED.P;
+        const C = 2n * Z1 * Z1 % ED.P;
+        const D = ED.P - A;
+        const E = ED.mod((X1 + Y1) * (X1 + Y1) - A - B);
+        const G = ED.mod(D + B);
+        const F = ED.mod(G - C);
+        const H = ED.mod(D - B);
+        return [E * F % ED.P, G * H % ED.P, F * G % ED.P, E * H % ED.P];
+      }
+
+      function edAdd(p, q) {
+        const [X1, Y1, Z1, T1] = p, [X2, Y2, Z2, T2] = q;
+        const A = (Y1 - X1) * (Y2 - X2) % ED.P;
+        const B = (Y1 + X1) * (Y2 + X2) % ED.P;
+        const C = 2n * ED.d * (T1 % ED.P) % ED.P * (T2 % ED.P) % ED.P;
+        const D = 2n * (Z1 % ED.P) % ED.P * (Z2 % ED.P) % ED.P;
+        const E = ED.mod(B - A), F = ED.mod(D - C), G = ED.mod(D + C), H = ED.mod(B + A);
+        return [E * F % ED.P, G * H % ED.P, F * G % ED.P, E * H % ED.P];
+      }
+
+      function edScalarmult(scalar, point) {
+        const p = [point[0] % ED.P, point[1] % ED.P, 1n, ED.mod(point[0] * point[1])];
+        let q = ED_IDENTITY;
+        for (const bit of scalar.toString(2)) {
+          q = edDouble(q);
+          if (bit === "1") q = edAdd(q, p);
+        }
+        return q;
+      }
+
+      function encodePoint(q) {
+        const zi = ED.modinv(q[2] % ED.P);
+        const x = q[0] * zi % ED.P, y = q[1] * zi % ED.P;
+        const bytes = encodeLE32(y);
+        bytes[31] = (bytes[31] & 0x7f) | (Number(x & 1n) << 7);
+        return bytes;
+      }
+
+      function clampScalar(hash) {
+        const s = hash.slice(0, 32);
+        s[0] &= 248; s[31] &= 127; s[31] |= 64;
+        return leToBig(s);
+      }
+
+      const scalarReduce = (hash) => leToBig(hash) % ED.L;
+
+      function ed25519PublicKey(seed) {
+        return encodePoint(edScalarmult(clampScalar(sha512(seed)), ED.B));
+      }
+
+      function ed25519Sign(message, seed, publicKey) {
+        const h = sha512(seed);
+        const a = clampScalar(h);
+        const prefix = h.subarray(32, 64);
+        const r = scalarReduce(sha512(edConcat(prefix, message)));
+        const R = encodePoint(edScalarmult(r, ED.B));
+        const k = scalarReduce(sha512(edConcat(R, publicKey, message)));
+        const S = (r + k * a) % ED.L;
+        return edConcat(R, encodeLE32(S));
+      }
+
+      return { sha256, ed25519PublicKey, ed25519Sign };
+    })();
+
+    // Ed25519 device identity. Uses native Web Crypto when `crypto.subtle` is
+    // available and falls back to FallbackCrypto over plain HTTP, so chat and
+    // the shared canvas work on both secure and non-secure origins.
     async function getCanvasIdentity() {
       if (!identityPromise) {
         identityPromise = (async () => {
-          if (!window.crypto || !window.crypto.subtle) {
-            throw new Error("Web Crypto Ed25519 not available");
-          }
-          const storageKey = "originless.canvas.private-key-jwk";
+          const seedKey = "originless.canvas.private-key-seed";
+          const jwkKey = "originless.canvas.private-key-jwk";
           const ownerKey = "originless.canvas.owner";
           const base64UrlToBytes = (str) => {
             const padded = str.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (str.length % 4)) % 4);
             return base64ToBytes(padded);
           };
+          const bytesToBase64Url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
-          let storedJWK;
-          let owner;
+          // Load the 32-byte Ed25519 seed. Fall back to a previously stored Web
+          // Crypto JWK (its `d` field is that same seed) so an existing browser
+          // identity is preserved when switching to the fallback signer.
+          let seed = null;
+          let storedJWK = null;
           try {
-            const stored = localStorage.getItem(storageKey);
+            const storedSeed = localStorage.getItem(seedKey);
+            if (storedSeed && /^[0-9a-f]{64}$/i.test(storedSeed)) seed = hexToBytes(storedSeed);
+            const stored = localStorage.getItem(jwkKey);
             storedJWK = stored ? JSON.parse(stored) : null;
-            owner = localStorage.getItem(ownerKey);
           } catch (_) {
             storedJWK = null;
-            owner = null;
           }
-
-          if (storedJWK && storedJWK.kty === "OKP" && storedJWK.crv === "Ed25519") {
+          if (!seed && storedJWK && storedJWK.kty === "OKP" && storedJWK.crv === "Ed25519" && storedJWK.d) {
             try {
-              const privateKey = await crypto.subtle.importKey("jwk", storedJWK, { name: "Ed25519" }, true, ["sign"]);
-              if (!owner && storedJWK.x) owner = `ed25519:${bytesToHex(base64UrlToBytes(storedJWK.x))}`;
-              if (owner) {
-                deviceIdentityVal.textContent = shortOwner(owner);
-                deviceIdentityVal.title = owner;
-                return { privateKey, owner };
-              }
+              const fromJWK = base64UrlToBytes(storedJWK.d);
+              if (fromJWK.length === 32) seed = fromJWK;
             } catch (_) {}
           }
-
-          const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
-          let publicKeyBytes;
-          try {
-            const publicJWK = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-            publicKeyBytes = base64UrlToBytes(publicJWK.x);
-          } catch (_) {
-            publicKeyBytes = new Uint8Array(await crypto.subtle.exportKey("raw", keyPair.publicKey));
+          if (!seed) {
+            if (!window.crypto || !window.crypto.getRandomValues) {
+              throw new Error("Secure random not available");
+            }
+            seed = window.crypto.getRandomValues(new Uint8Array(32));
           }
-          owner = `ed25519:${bytesToHex(publicKeyBytes)}`;
 
+          const publicKey = FallbackCrypto.ed25519PublicKey(seed);
+          const owner = `ed25519:${bytesToHex(publicKey)}`;
           try {
-            const privateJWK = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
-            if (privateJWK) localStorage.setItem(storageKey, JSON.stringify(privateJWK));
+            localStorage.setItem(seedKey, bytesToHex(seed));
             localStorage.setItem(ownerKey, owner);
           } catch (_) {}
 
+          // Prefer the native implementation when the browser exposes it.
+          let nativeKey = null;
+          if (window.crypto && window.crypto.subtle) {
+            try {
+              nativeKey = await crypto.subtle.importKey(
+                "jwk",
+                { kty: "OKP", crv: "Ed25519", d: bytesToBase64Url(seed), x: bytesToBase64Url(publicKey) },
+                { name: "Ed25519" },
+                false,
+                ["sign"]
+              );
+            } catch (_) {
+              nativeKey = null;
+            }
+          }
+
           deviceIdentityVal.textContent = shortOwner(owner);
           deviceIdentityVal.title = owner;
-          return { privateKey: keyPair.privateKey, owner };
+
+          return {
+            owner,
+            async signMessage(message) {
+              const bytes = new TextEncoder().encode(message);
+              if (nativeKey) {
+                try {
+                  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+                  return bytesToHex(new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, nativeKey, digest)));
+                } catch (_) { /* fall through to the JS signer */ }
+              }
+              return bytesToHex(FallbackCrypto.ed25519Sign(FallbackCrypto.sha256(bytes), seed, publicKey));
+            }
+          };
         })().catch((err) => {
           identityPromise = null;
           deviceIdentityVal.textContent = "Unavailable";
@@ -1493,8 +1744,6 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       const expiresAt = createdAt + 30 * 24 * 60 * 60;
       const canonicalData = canonicalize(data);
       const message = `${identity.owner}:${collection}:${createdAt}:${expiresAt}:${canonicalData}::${label}`;
-      const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(message)));
-      const signature = new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, identity.privateKey, digest));
       return {
         owner: identity.owner,
         collection,
@@ -1502,7 +1751,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
         expires_at: expiresAt,
         data,
         labels: [label],
-        sig: bytesToHex(signature)
+        sig: await identity.signMessage(message)
       };
     }
 
