@@ -16,10 +16,25 @@ Then open <http://localhost:3232>.
 | If you want to | Read |
 | --- | --- |
 | Run a node and publish your first event in five minutes | **[Quickstart](quickstart.md)** |
+| Understand what this replaces, and what it does not | **[What Originless replaces](replacements.md)** |
 | Call every endpoint: parameters, status codes, bodies | **[HTTP API reference](api.md)** |
 | Sign events, derive IDs, filter, page, stream, federate | **[Event protocol](events.md)** |
 | Configure ports, storage, federation; back up; troubleshoot | **[Configuration and operations](configuration.md)** |
 | Understand or change the code | **[Architecture](architecture.md)** |
+
+## What it replaces
+
+Originless collapses three things that are normally separate services into one
+container: a **Nostr-style relay** (event transport and live subscriptions), a
+**Blossom-style blob server** (file upload and fetch), and the discovery,
+connection authentication and proxying that hold them together.
+
+The relay model has a structural limit — relays do not replicate to each other,
+so a client must hold N sockets and write to every one of them. Originless nodes
+pull from each other over plain HTTP, re-verify every signature and converge on
+the union of their events, so the fan-out stops being the client's problem. See
+[what it replaces](replacements.md) for the full mapping, the reasoning, and an
+honest list of where the analogy does not hold.
 
 ## The two primitives
 

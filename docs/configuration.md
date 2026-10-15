@@ -104,7 +104,9 @@ ones. Only point `SYNC_NODES` at URLs you trust.
 ## Federation
 
 Set `SYNC_NODES` on each node to the other's base URL and they converge on the
-union of both event logs over plain HTTP, every 5 seconds.
+union of both event logs over plain HTTP, every 5 seconds. This is what removes
+the single point of failure a one-node deployment would otherwise have — compare
+a relay, which loses its share of the log when it goes away.
 
 ```bash
 docker run -d --name o1 -p 127.0.0.1:3233:3232 -e SYNC_NODES=http://localhost:3234 ghcr.io/besoeasy/originless:latest

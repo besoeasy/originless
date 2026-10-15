@@ -56,6 +56,23 @@ is in the [quickstart](docs/quickstart.md).
 | **Federation** | `SYNC_NODES` makes nodes converge on the union of their event sets, re-verifying every signature on the way in. |
 | **CORS everywhere** | Any origin may call the API — there are no credentials for a browser to withhold. |
 
+## What this replaces
+
+Originless stands in for three services that are normally deployed separately:
+
+| Role | Normally | Here |
+| --- | --- | --- |
+| Events and live subscriptions | a Nostr relay over WebSocket | `POST /events` plus SSE at `/events/stream` |
+| File upload and fetch | a Blossom-style blob server | `POST /up` plus `/cid/{cid}`, CIDs any gateway serves |
+| Discovery, connection auth, upkeep | relay lists, NIP-42 handshakes, N relays to keep alive | one URL, no handshake, one volume |
+
+Relays do not replicate to each other, so a client holds N sockets and writes to
+every one of them; Originless nodes pull from each other over plain HTTP,
+re-verify every signature and converge on the union of their events — so a node
+dying is a rebuild, not data loss. The full mapping, the reasoning, and an
+honest list of where the analogy does not hold are in
+[what this replaces](docs/replacements.md).
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -72,6 +89,7 @@ container replacement. Garbage collection runs hourly at a fixed 90% watermark.
 | | |
 | --- | --- |
 | [Quickstart](docs/quickstart.md) | Run a node, publish a signed event, watch it stream |
+| [What this replaces](docs/replacements.md) | Relay and blob-server mapping, why it is more resilient, where the analogy breaks |
 | [HTTP API reference](docs/api.md) | Every route, parameter, body and status code |
 | [Event protocol](docs/events.md) | Signing recipe, canonical JSON, IDs, filters, pagination, SSE, federation |
 | [Configuration and operations](docs/configuration.md) | Ports, storage math, access control, backup, troubleshooting |

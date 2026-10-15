@@ -326,6 +326,11 @@ overflows loses the oldest pending frame rather than stalling the publisher.
 Nodes converge on the **union** of each other's event sets by pulling over the
 same public HTTP API. There is no new protocol and no broker.
 
+This is the property that makes Originless a replacement for a relay rather than
+a different relay: relays do not replicate to each other, so a client holds N
+independent sockets and is responsible for writing to every one of them. Here the
+fan-out is the nodes' job. See [what this replaces](replacements.md).
+
 ```bash
 docker run -d --name o1 -p 127.0.0.1:3233:3232 -e SYNC_NODES=http://localhost:3234 ghcr.io/besoeasy/originless:latest
 docker run -d --name o2 -p 127.0.0.1:3234:3232 -e SYNC_NODES=http://localhost:3233 ghcr.io/besoeasy/originless:latest
