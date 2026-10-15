@@ -18,7 +18,14 @@ type cidTestServer struct {
 	catContent   string
 	blockStatus  int
 	objectStatus int
-	requests     []string
+	// modern mimics current Kubo: object/stat has been removed and files/stat
+	// answers instead. When false the node behaves like the older release and
+	// only serves object/stat, which is the fallback path.
+	modern     bool
+	filesType  string
+	filesSize  int64
+	requests   []string
+	blockCalls int
 }
 
 func newCIDTestServer(t *testing.T) *cidTestServer {
@@ -33,18 +40,30 @@ func newCIDTestServer(t *testing.T) *cidTestServer {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v0/block/stat":
+			s.blockCalls++
 			if s.blockStatus != http.StatusOK {
-				http.Error(w, "block was not found locally (offline)", s.blockStatus)
+				http.Error(w, "block was not found locally (offline): ipld: could not find "+r.URL.Query().Get("arg"), s.blockStatus)
 				return
 			}
 			_, _ = fmt.Fprintf(w, `{"Key":%q,"Size":74}`, r.URL.Query().Get("arg"))
 		case "/api/v0/object/stat":
+			if s.modern {
+				http.Error(w, `{"Message":"removed, use 'ipfs dag' or 'ipfs files' instead","Code":0,"Type":"error"}`, http.StatusInternalServerError)
+				return
+			}
 			if s.objectStatus != http.StatusOK {
 				http.Error(w, "not found", s.objectStatus)
 				return
 			}
 			_, _ = fmt.Fprintf(w, `{"Hash":%q,"NumLinks":%d,"BlockSize":74,"LinksSize":2,"DataSize":72,"CumulativeSize":74}`,
 				r.URL.Query().Get("arg"), s.numLinks)
+		case "/api/v0/files/stat":
+			if !s.modern {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			_, _ = fmt.Fprintf(w, `{"Hash":%q,"Size":%d,"CumulativeSize":74,"Blocks":1,"Type":%q}`,
+				r.URL.Query().Get("arg"), s.filesSize, s.filesType)
 		case "/api/v0/ls":
 			_, _ = fmt.Fprintf(w, `{"Objects":[{"Hash":%q,"Links":[`+
 				`{"Name":"a.txt","Hash":"Qma","Size":10,"Type":2},`+
@@ -167,6 +186,120 @@ func TestCIDInfoUnavailable(t *testing.T) {
 	}
 	if response.Block != nil || response.Object != nil {
 		t.Errorf("response = %+v, want no stats for a missing CID", response)
+	}
+	// A missing block must not trigger any further lookups.
+	if upstream.blockCalls != 1 {
+		t.Errorf("block/stat called %d times, want 1", upstream.blockCalls)
+	}
+	for _, request := range upstream.requests {
+		if strings.Contains(request, "object/stat") || strings.Contains(request, "files/stat") {
+			t.Errorf("request %q was made for a missing CID", request)
+		}
+	}
+}
+
+// Current Kubo removed object/stat in favour of files/stat, so a file CID must
+// still be described (and its content returned) on a node that serves only the
+// modern endpoint.
+func TestCIDInfoAgainstModernKubo(t *testing.T) {
+	upstream := newCIDTestServer(t)
+	upstream.modern = true
+	upstream.filesType = "file"
+	upstream.filesSize = 17
+	defer upstream.close()
+
+	client, err := ipfs.NewClient(upstream.server.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-modern", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response cidResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Available {
+		t.Errorf("available = false, want true")
+	}
+	if response.Object == nil {
+		t.Fatalf("object = nil, want a UnixFS stat from files/stat")
+	}
+	if response.Object.Type != "file" || response.Object.Blocks != 1 || response.Object.DataSize != 17 {
+		t.Errorf("object = %+v, want files/stat values", response.Object)
+	}
+	if response.Object.IsDirectory() {
+		t.Errorf("IsDirectory() = true for a file")
+	}
+	if want := base64.StdEncoding.EncodeToString([]byte(`{"hello":"world"}`)); response.Data != want {
+		t.Errorf("data = %q, want %q", response.Data, want)
+	}
+	if string(response.JSON) != `{"hello":"world"}` {
+		t.Errorf("json = %s, want decoded file content", response.JSON)
+	}
+}
+
+// A modern node reports directories through files/stat's Type field and
+// reports no NumLinks at all, so the link listing must key off Type.
+func TestCIDInfoListsLinksForModernDirectory(t *testing.T) {
+	upstream := newCIDTestServer(t)
+	upstream.modern = true
+	upstream.filesType = "directory"
+	defer upstream.close()
+
+	client, err := ipfs.NewClient(upstream.server.URL)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-modern-dir", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response cidResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Object == nil || !response.Object.IsDirectory() {
+		t.Fatalf("object = %+v, want a directory", response.Object)
+	}
+	if len(response.Links) != 2 || response.Links[0].Name != "a.txt" {
+		t.Errorf("links = %+v, want two directory entries", response.Links)
+	}
+	if response.Data != "" || len(response.JSON) != 0 {
+		t.Errorf("data = %q, json = %s; want no content for a directory", response.Data, response.JSON)
+	}
+}
+
+// Every CID lookup describes the local repository. Without offline=true Kubo
+// tries to fetch an absent block from the network, which turns a local
+// availability check into a multi-second stall before a misleading 503.
+func TestCIDLookupsAreOffline(t *testing.T) {
+	for _, modern := range []bool{false, true} {
+		upstream := newCIDTestServer(t)
+		upstream.modern = modern
+		upstream.filesType = "directory"
+
+		client, err := ipfs.NewClient(upstream.server.URL)
+		if err != nil {
+			t.Fatalf("NewClient() error = %v", err)
+		}
+		recorder := httptest.NewRecorder()
+		mustNewRouter(t, client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/cid/bafy-offline", nil))
+
+		if len(upstream.requests) == 0 {
+			t.Fatalf("modern=%t: no upstream requests recorded", modern)
+		}
+		for _, request := range upstream.requests {
+			if !strings.Contains(request, "offline=true") {
+				t.Errorf("modern=%t: request %q is not offline", modern, request)
+			}
+		}
+		upstream.close()
 	}
 }
 

@@ -84,14 +84,14 @@ func (h *cidHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	response.Object = &obj
 
-	if obj.NumLinks > 0 {
+	if obj.IsDirectory() {
 		links, err := h.client.Ls(ctx, cid)
 		if err != nil {
 			log.Printf("IPFS ls failed for %s: %v", cid, err)
 		} else {
 			response.Links = links
 		}
-	} else if obj.CumulativeSize <= maxCIDContentBytes {
+	} else if obj.ContentSize() <= maxCIDContentBytes {
 		data, decoded, err := h.client.Content(ctx, cid)
 		if err != nil {
 			log.Printf("IPFS cat failed for %s: %v", cid, err)

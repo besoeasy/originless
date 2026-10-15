@@ -55,7 +55,7 @@ func NewClient(rawURL string) (*Client, error) {
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
-				DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+				DialContext:           (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
 				TLSHandshakeTimeout:   5 * time.Second,
 				ResponseHeaderTimeout: 30 * time.Second,
 				IdleConnTimeout:       60 * time.Second,
@@ -401,9 +401,12 @@ type BlockStat struct {
 	Size int64  `json:"Size"`
 }
 
+// BlockStat reports the local block for a CID. The lookup is offline: without
+// it, Kubo tries to fetch a missing block from the network, which stalls a
+// local-only availability check until it times out.
 func (c *Client) BlockStat(ctx context.Context, cid string) (BlockStat, error) {
 	var stat BlockStat
-	if err := c.postJSON(ctx, "api/v0/block/stat", url.Values{"arg": {cid}}, &stat); err != nil {
+	if err := c.postJSON(ctx, "api/v0/block/stat", offlineValues(cid), &stat); err != nil {
 		return BlockStat{}, err
 	}
 	return stat, nil
@@ -416,14 +419,76 @@ type ObjectStat struct {
 	LinksSize      int64  `json:"LinksSize"`
 	DataSize       int64  `json:"DataSize"`
 	CumulativeSize int64  `json:"CumulativeSize"`
+	// Type is "file" or "directory" as reported by files/stat. It is empty on
+	// nodes that only serve the older object/stat.
+	Type string `json:"Type,omitempty"`
+	// Blocks is the number of blocks a UnixFS file is stored in.
+	Blocks int64 `json:"Blocks,omitempty"`
 }
 
+// IsDirectory reports whether the stat describes a directory. Older nodes
+// answer with NumLinks only; current ones answer with Type.
+func (s ObjectStat) IsDirectory() bool {
+	return s.NumLinks > 0 || strings.EqualFold(s.Type, "directory")
+}
+
+// ContentSize is the number of bytes of content the root holds: DataSize for a
+// small file, CumulativeSize when it is the only meaningful figure.
+func (s ObjectStat) ContentSize() int64 {
+	if s.CumulativeSize > 0 {
+		return s.CumulativeSize
+	}
+	return s.DataSize
+}
+
+// offlineValues builds the argument for a Kubo lookup that must consult only
+// the local repository.
+func offlineValues(cid string) url.Values {
+	return url.Values{"arg": {cid}, "offline": {"true"}}
+}
+
+// ObjectStat describes the UnixFS root behind a CID.
+//
+// Kubo removed object/stat in favour of files/stat, so files/stat is asked
+// first and object/stat is kept as a fallback for older nodes. Both are called
+// offline: this describes a CID in *our* repository, so reaching for the
+// network would be both slow and misleading.
 func (c *Client) ObjectStat(ctx context.Context, cid string) (ObjectStat, error) {
-	var stat ObjectStat
-	if err := c.postJSON(ctx, "api/v0/object/stat", url.Values{"arg": {cid}}, &stat); err != nil {
+	stat, filesErr := c.filesStat(ctx, cid)
+	if filesErr == nil {
+		return stat, nil
+	}
+	var legacy ObjectStat
+	if err := c.postJSON(ctx, "api/v0/object/stat", offlineValues(cid), &legacy); err != nil {
+		// Neither endpoint worked. Prefer the files/stat failure: it is the
+		// one that describes a current node.
+		return ObjectStat{}, filesErr
+	}
+	return legacy, nil
+}
+
+type filesStat struct {
+	Hash           string `json:"Hash"`
+	Size           int64  `json:"Size"`
+	CumulativeSize int64  `json:"CumulativeSize"`
+	Blocks         int64  `json:"Blocks"`
+	Type           string `json:"Type"`
+}
+
+func (c *Client) filesStat(ctx context.Context, cid string) (ObjectStat, error) {
+	// files/stat takes a path rather than a bare CID.
+	var stat filesStat
+	values := url.Values{"arg": {"/ipfs/" + cid}, "offline": {"true"}}
+	if err := c.postJSON(ctx, "api/v0/files/stat", values, &stat); err != nil {
 		return ObjectStat{}, err
 	}
-	return stat, nil
+	return ObjectStat{
+		Hash:           stat.Hash,
+		DataSize:       stat.Size,
+		CumulativeSize: stat.CumulativeSize,
+		Blocks:         stat.Blocks,
+		Type:           stat.Type,
+	}, nil
 }
 
 type LsLink struct {
@@ -443,9 +508,12 @@ type lsResponse struct {
 	Objects []lsObject `json:"Objects"`
 }
 
+// Ls lists the entries of a directory. Like every other lookup it stays local,
+// so a CID that is not in this repository fails fast instead of hanging on a
+// network fetch.
 func (c *Client) Ls(ctx context.Context, cid string) ([]LsLink, error) {
 	var output lsResponse
-	if err := c.postJSON(ctx, "api/v0/ls", url.Values{"arg": {cid}}, &output); err != nil {
+	if err := c.postJSON(ctx, "api/v0/ls", offlineValues(cid), &output); err != nil {
 		return nil, err
 	}
 	if len(output.Objects) > 0 {

@@ -190,6 +190,13 @@ opinion about the repo. Its job is to be safe under load:
   timeouts.
 - `StatusError` carries Kubo's HTTP status, so handlers can distinguish "this
   node does not have it" from "the node is broken".
+- Every CID lookup is sent with `offline=true`. Without it Kubo fetches an
+  absent block from the public network, so a local-only availability check
+  stalls and then reports something misleading.
+- The UnixFS stat is read from `files/stat` with `object/stat` kept as a
+  fallback, because Kubo removed the latter. The two shapes differ — only the
+  old one reports `NumLinks` — so `ObjectStat.IsDirectory` and `ContentSize`
+  normalize the difference and the handler never has to know which node answered.
 
 The spool-then-add design in `internal/server/upload.go` is what makes the 1 GiB
 upload limit safe: parts land on disk first, free space is checked before any
@@ -234,6 +241,9 @@ The tests that encode deliberate behaviour, rather than just exercising lines:
 | `TestEventOwnerIsCaseNormalized` | One key yields one id and matches any-case filters |
 | `TestPersistentStoreSurvivesReopen` | Durability across a simulated restart |
 | `TestSyncOnceRejectsForgedEvents` | Federation re-verifies, it does not trust |
+| `TestCIDLookupsAreOffline` | A CID is described from the local repository only |
+| `TestCIDInfoAgainstModernKubo` | `files/stat` answers the UnixFS stat current nodes serve |
+| `TestCIDInfoListsLinksForModernDirectory` | Directories are recognised without `NumLinks` |
 | `TestUploadRejectsPathTraversal` | Multipart paths are contained |
 | `TestHealthzReportsUnavailableNode` | Health never lies about a dead node |
 

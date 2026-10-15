@@ -211,36 +211,45 @@ curl http://localhost:3232/cid/QmZULkCELmmk5XNfCgTnCyFgAVxBRBXyDHGGMVoLFLiXEN
 {
   "cid": "QmZULkCELmmk5XNfCgTnCyFgAVxBRBXyDHGGMVoLFLiXEN",
   "available": true,
-  "block": {"Key": "QmZULkCELmmk5XNfCgTnCyFgAVxBRBXyDHGGMVoLFLiXEN", "Size": 14}
+  "block": {"Key": "QmZULkCELmmk5XNfCgTnCyFgAVxBRBXyDHGGMVoLFLiXEN", "Size": 14},
+  "object": {
+    "Hash": "QmZULkCELmmk5XNfCgTnCyFgAVxBRBXyDHGGMVoLFLiXEN",
+    "NumLinks": 0,
+    "BlockSize": 0,
+    "LinksSize": 0,
+    "DataSize": 6,
+    "CumulativeSize": 14,
+    "Type": "file"
+  },
+  "data": "aGVsbG8K"
 }
 ```
 
 | Field | Present when |
 | --- | --- |
 | `block` | The local block exists. |
-| `object` | The node serves `object/stat` and the root is a UnixFS DAG object. |
-| `links` | The root is a directory (`NumLinks > 0`). |
+| `object` | The node can describe the UnixFS root. |
+| `object.Type` | `"file"` or `"directory"` from the node's `files/stat`. Absent on nodes that only speak the older `object/stat`. |
+| `object.Blocks` | Number of blocks the file is stored in, when reported. |
+| `links` | The root is a directory. |
 | `data` | Single-block content no larger than 1 MiB, base64-encoded. |
 | `json` | That content parsed as JSON. |
 | `error` | The block is missing locally, with `available: false` and no `block`/`object`. |
 
-`503` means the IPFS node itself is unreachable; see the version note below
-before reading that as "missing content".
+A missing block answers `200` with `available: false` — the query worked, the
+content is simply not here. `503` means the IPFS node itself is unreachable.
 
-#### Kubo version note
+#### How the node is queried
 
-Two behaviours here depend on the Kubo release, and both matter before you rely
-on the optional fields:
+All three lookups — block, UnixFS stat, directory listing — are sent with
+`offline=true`, so they describe **this** repository and nothing else. Without
+it, Kubo would try to fetch an absent block from the public network, turning a
+local availability check into a multi-second wait for a misleading answer.
 
-- **`object/stat` has been removed** from current Kubo ("removed, use `ipfs dag`
-  or `ipfs files` instead"). Against such a node `object`, `links`, `data` and
-  `json` are omitted and only `block` is reported. `dag/stat` and `files/stat`
-  are the current equivalents.
-- **`block/stat` is queried without `offline=true`**, so for a CID this node does
-  not hold, Kubo first tries to fetch it from the network. On an isolated node
-  that stalls until this endpoint's 5-second timeout and answers `503` rather
-  than `available: false`. Availability is therefore a local fact only in the
-  sense that the block itself is; the *answer* may be slow on an offline node.
+The UnixFS stat is read from `files/stat`, which replaced the `object/stat`
+endpoint removed from current Kubo; `object/stat` is still tried as a fallback so
+older nodes keep working. `Type` therefore identifies a directory on a current
+node, where `NumLinks` is absent.
 
 ## `POST /events`
 

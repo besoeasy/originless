@@ -186,8 +186,8 @@ live `events.db` without stopping can capture a torn WAL; copy the `-wal` and
 | `/healthz` returns `503`, `{"status":"degraded"}` | Kubo is unreachable — it may still be starting, or the repo is corrupt. `docker logs originless`; confirm the daemon is running before the app is. |
 | `/stats` returns `503` | Same as above: stats are read from the node. |
 | Events vanish over time | Expected. Either their `expires_at` passed (`events.expired`), or the byte budget evicted the oldest (`events_evicted` climbs). |
-| A CID returns `available: false` | Normal for unpinned content after GC, or for a CID that only exists on the public network. |
-| `/cid/{cid}` takes ~5s then returns `503` | The node tried to fetch a missing block from the network and hit the request timeout. See the Kubo version note in the [API reference](api.md#get-cidcid). |
+| A CID returns `available: false` | Normal for unpinned content after GC, or for a CID that only exists on the public network. Lookups are offline, so the answer is immediate. |
+| `/cid/{cid}` returns `503` | The IPFS node is unreachable. Nothing is reported about availability, because the question could not be asked. |
 | `400 invalid collection` | Collections must match `^[a-z0-9/_-]{1,32}$`. Lower case, no dots. |
 | `401` on publish | The signature does not verify: the message was built in the wrong field order, `owner` was not lower-cased before signing, the data was not canonicalized, or the signature covered the message instead of its SHA-256 digest. |
 | `503 too many event stream subscribers` | The 256-subscriber cap is full. Check for clients that reconnect in a loop without honouring `Last-Event-ID`. |
