@@ -668,8 +668,8 @@
           <p class="panel-title title-good">The Best Option</p>
           <p class="body-text" style="font-size:0.875rem;">The Originless way</p>
           <ul class="tick-list">
-            <li><span class="verdict-good">✓</span><span><strong>One Single Binary:</strong> Zero-dependency Go container running on a $4/mo VPS, Raspberry Pi, Umbrel, Docker, or laptop.</span></li>
-            <li><span class="verdict-good">✓</span><span><strong>Client-Side Cryptography:</strong> Ed25519 keypairs generated on-device in 2 lines of code. The key is the identity; zero server auth state.</span></li>
+            <li><span class="verdict-good">✓</span><span><strong>One Container:</strong> a single Go service with an embedded Kubo node in one image. A $4/mo VPS, a Raspberry Pi, or a laptop — no database, broker, or object store to operate.</span></li>
+            <li><span class="verdict-good">✓</span><span><strong>Client-Side Cryptography:</strong> Ed25519 keypairs generated on-device. The key is the identity; zero server auth state.</span></li>
             <li><span class="verdict-good">✓</span><span><strong>Native Real-Time (SSE):</strong> Instant Server-Sent Events (<code>/events/stream</code>) supported natively in every browser without socket libraries.</span></li>
             <li><span class="verdict-good">✓</span><span><strong>Autonomous Self-Cleaning:</strong> Automatic TTL record pruning and unpinned IPFS content reclaimed by garbage collection keeps every node lean.</span></li>
           </ul>
@@ -701,21 +701,21 @@
           <h3>Content-Addressed</h3>
           <p class="mini-sub">IPFS CIDs, Metadata Locally</p>
           <p>Upload files up to 1 GiB through <code>/up</code> and <code>/upf</code>. Every file is addressed by its IPFS CID and viewable anywhere via public gateways.</p>
-          <p class="replaces"><strong>Replaces:</strong> AWS S3, Cloudflare R2, MinIO, 0x0.st</p>
+          <p class="replaces"><strong>Replaces:</strong> Blossom blob servers (NIP-96), AWS S3, Cloudflare R2, MinIO, 0x0.st</p>
         </div>
         <div class="mini-card reveal" style="border-top-color:var(--color-purple);">
           <span class="mini-emoji">🗄️</span>
           <h3>ACID WAL</h3>
-          <p class="mini-sub">Indexed SQLite Event Store</p>
-          <p>Microsecond queries, full-text search, label indexing, keyset cursor pagination, and built-in TTL eviction. Zero database migrations or ORM schemas required.</p>
+          <p class="mini-sub">SQLite Event Store, In-Memory Reads</p>
+          <p>Events are held in memory and served from there, with every write mirrored to a WAL-journalled SQLite database that survives restarts. Keyset cursor pagination, substring search, label and collection filters, and built-in TTL eviction. No migrations, no ORM, no schema to evolve.</p>
           <p class="replaces"><strong>Replaces:</strong> Firebase Firestore, Supabase, PocketBase</p>
         </div>
         <div class="mini-card reveal" style="border-top-color:var(--color-orange);">
-          <span class="mini-emoji">🌐</span>
-          <h3>libp2p Mesh</h3>
-          <p class="mini-sub">Autonomous P2P Swarm</p>
-          <p>Single-port HTTP/WS multiplexing, AutoNAT hole punching, Kademlia DHT discovery, and O(1) commutative XOR state root fast-path sync across nodes worldwide.</p>
-          <p class="replaces"><strong>Replaces:</strong> Nostr Relays, Matrix Homeservers, BitTorrent</p>
+          <span class="mini-emoji">🔁</span>
+          <h3>Federation</h3>
+          <p class="mini-sub">Nodes Converge, Not Clients</p>
+          <p>Set <code>SYNC_NODES</code> and nodes pull from each other over plain HTTP every five seconds, re-verifying every signature and converging on the union of their event logs. A node dying is a rebuild from any peer, not data loss.</p>
+          <p class="replaces"><strong>Replaces:</strong> Nostr relays, Matrix homeservers</p>
         </div>
       </div>
     </section>
@@ -731,6 +731,9 @@
           <li><span class="verdict-good">✓</span><span><strong>Resumable:</strong> each node stores its per-peer checkpoint in SQLite, so a restart continues where it left off.</span></li>
           <li><span class="verdict-good">✓</span><span><strong>Events only:</strong> state you share is the signed event log — IPFS blobs stay on the node that accepted them.</span></li>
         </ul>
+      </div>
+      <div class="panel reveal" style="margin-top:1rem;">
+        <p class="body-text"><strong>Why this replaces a relay rather than being one.</strong> Nostr relays do not replicate to each other, so a client holds N independent WebSocket subscriptions and is responsible for writing to every one of them — and a relay that disappears takes its share of the log with it. Here the fan-out belongs to the nodes: each one pulls, verifies and re-serves, so a replaced node rebuilds from any surviving peer. <a href="https://github.com/besoeasy/originless/blob/main/docs/replacements.md">Full mapping and honest limits →</a></p>
       </div>
     </section>
 
@@ -797,7 +800,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
           <p class="panel-title">Signed Chat</p>
             <span class="live-tag">Live SSE</span>
           </div>
-          <p class="body-text" style="font-size:0.875rem;">Zero-server-auth messages on <code>originless/chat</code>, signed on-device with Web Crypto Ed25519.</p>
+          <p class="body-text" style="font-size:0.875rem;">Zero-server-auth messages on <code>originless/chat</code>, signed on-device with an Ed25519 key held only in this browser.</p>
           <p class="chat-identity">Signer key: <span id="device-identity-val">Generating…</span> <button id="copy-my-key-btn" class="btn-sm" type="button" style="padding:0.25rem 0.5rem; font-size:0.6875rem;">Copy</button></p>
           <p id="chat-state" class="state">Loading messages…</p>
           <p id="chat-error" class="error" hidden></p>
@@ -1027,7 +1030,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       <div class="panel reveal" style="text-align:center; padding:3rem 2rem;">
         <p class="eyebrow" style="display:flex; justify-content:center;"><span class="marker">[*]</span>&nbsp;Zero-auth backend</p>
         <h2 class="section-title">The Universal Zero-Auth Backend for Modern Apps.</h2>
-        <p class="lede" style="margin-left:auto; margin-right:auto; text-align:center;">No accounts. No API keys. No database migrations. Signed events, IPFS content-addressing, native real-time streams, and autonomous P2P replication in a single binary.</p>
+        <p class="lede" style="margin-left:auto; margin-right:auto; text-align:center;">No accounts. No API keys. No database migrations. Signed events, IPFS content-addressing, native real-time streams, and node-to-node replication in a single container.</p>
         <div class="hero-cta" style="margin-bottom:0;">
           <a class="gh-star" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer" aria-label="Star besoeasy/originless on GitHub">
             <span class="gh-star-main">
