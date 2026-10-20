@@ -34,9 +34,6 @@ type Config struct {
 	// EventsDBPath is where signed events are persisted in SQLite. It always
 	// has a working value; there is no memory-only mode.
 	EventsDBPath string
-	// SyncNodes are base URLs of peer Originless nodes to federate with
-	// (bidirectional pull sync over HTTP).
-	SyncNodes []string
 }
 
 // Default returns the configuration used when nothing is set in the
@@ -99,23 +96,10 @@ func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 		cfg.MaxEventBytes = parsed / 5
 	}
 
-	if value, ok := getenv("SYNC_NODES"); ok && strings.TrimSpace(value) != "" {
-		for _, node := range strings.Split(value, ",") {
-			node = strings.TrimSpace(node)
-			if node == "" {
-				continue
-			}
-			if !strings.HasPrefix(node, "http://") && !strings.HasPrefix(node, "https://") {
-				return Config{}, fmt.Errorf("invalid SYNC_NODES entry %q: must start with http:// or https://", node)
-			}
-			cfg.SyncNodes = append(cfg.SyncNodes, node)
-		}
-	}
-
 	return cfg, nil
 }
 
 // Describe renders the settings, for the startup log line.
 func (c Config) Describe() string {
-	return fmt.Sprintf("storage_max=%q event_bytes_budget=%d events_db=%q sync_nodes=%d", c.StorageMax, c.MaxEventBytes, c.EventsDBPath, len(c.SyncNodes))
+	return fmt.Sprintf("storage_max=%q event_bytes_budget=%d events_db=%q", c.StorageMax, c.MaxEventBytes, c.EventsDBPath)
 }

@@ -24,10 +24,11 @@ databases that need babysitting. So I built the two primitives once:
   hash of the bytes, so the name *is* the proof, and the bytes come from any
   node or any IPFS gateway — anonymously if you want.
 
-Run it on two computers and anything you upload to one can be pulled through
-the other. Nodes converge on the same event log over plain HTTP. No database
-server, no message broker, no accounts of any kind — one container, and nothing
-in it is your problem.
+Point your clients at one node, or at several. There is no replication layer to
+run: every event is signed and identified by its content, so a client that
+wants its data in more than one place just publishes the same bytes to each
+node and they agree. No database server, no message broker, no peer topology,
+no accounts of any kind — one container, and nothing in it is your problem.
 
 > [!IMPORTANT]
 > **Keep a copy of every file you want permanently shared.** I don't pin
@@ -79,8 +80,8 @@ docker run -d --name originless \
 Open **<http://localhost:3232>** — there's a dashboard, a live chat demo and a
 shared canvas you can open in two browsers. I didn't ask for a volume and I
 don't want one by default: everything is ephemeral by design. A replaced
-container is a fresh node; peers rebuild its event log, and your files live in
-your copies, not in the node. Want it private in any way?
+container is a fresh node; the event log goes with it unless you mount a volume,
+and your files live in your copies, not in the node. Want it private in any way?
 `-p 127.0.0.1:3232:3232`.
 
 Publish a signed event with the generator I ship, then watch it stream live:
@@ -113,7 +114,8 @@ curl -F "file=@hello.txt" http://localhost:3232/up
 That's the whole product. Everything else is depth:
 
 - [`examples.md`](examples.md) — every client recipe, copy-paste ready (Go,
-  Node, SSE, pagination, uploads, the two-computer demo, the re-anchor loop).
+  Node, SSE, pagination, uploads, publishing to several nodes, the re-anchor
+  loop).
 - [`skill.md`](skill.md) — the agent skill: one file any agent can follow.
 - [`reference.md`](reference.md) — protocol spec, full HTTP API, configuration,
   architecture, and the story of why this exists.
@@ -123,6 +125,6 @@ That's the whole product. Everything else is depth:
 **Two things you should know before you build on it.** There is no access
 control — an Ed25519 signature proves *who* wrote an event, never *what they're
 allowed to do*; put authorization in your client. And uploads are ephemeral —
-`docker rm` takes the event log (peers rebuild it) and unpinned CIDs (your
-copies replace them). Everything these two facts imply:
+`docker rm` takes the event log and unpinned CIDs (your copies replace them).
+Everything these two facts imply:
 [`reference.md`](reference.md#two-things-to-know).

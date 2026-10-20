@@ -154,7 +154,7 @@ Rules of the road:
 - Verify-by-default: when you fetch from any IPFS gateway (`/cid/<cid>` locally, or https://inbrowser.link/ipfs/*.ipfs/ipfs/<cid>, ipfs.io), the bytes must hash to the CID — you never have to trust whichever mirror served them.
 - 1 GiB hard upload cap; > 8 KiB payloads in events go by CID reference in `data`.
 
-**Almost every "uploads" flow wants an event too:** upload file → publish an event whose `data` mentions the CID (and a human-readable `name`, `summary`, `mime`). The event is how peers *learn* the CID; the CID is how anyone *fetches* the bytes from any node/gateway.
+**Almost every "uploads" flow wants an event too:** upload file → publish an event whose `data` mentions the CID (and a human-readable `name`, `summary`, `mime`). The event is how readers *learn* the CID; the CID is how anyone *fetches* the bytes from any node/gateway.
 
 ## Use-case playbook (pick the design first)
 
@@ -167,7 +167,7 @@ Rules of the road:
 | **Task queue (fire-and-forget / worker polling)** | worker polls `GET /events?label=queue:mine&limit=1&cursor=…`; result events use short TTL so stale jobs vanish; idempotent by event id |
 | **Paste / screenshot / file drop service** | `POST /up` → publish `collection: uploads/paste` with `{"name":"…","cid":"…"}` → hand the human a url — the CID fetches from any gateway; ideal for CLI/screenshot tools and static-site comment boxes |
 | **Anonymous public file sharing** | no account needed on either side; the CID is the share link; long-lived survival = a client/script that re-uploads the same directory (`same bytes → same CID`) whenever items fall out of the network |
-| **Cross-instance app state (roaming profile)** | publish your config each time it changes with TTL ≈ 1 year; clients of multiple nodes converge on the union |
+| **Cross-instance app state (roaming profile)** | publish your config each time it changes with TTL ≈ 1 year; publish to every node your other devices read from |
 | **Static-site comment/no-backend form** | CORS is `*`, so a plain JS `fetch(POST /events)` from any page works; no server code needed |
 | **E2EE room** | publish ciphertext as `data` (8 KiB cap → chunks/CID for larger), keys never touch any node |
 | **Blog/static-footer badges / counters** | periodic one-collection events + a public read URL; no DB in the app |
@@ -198,14 +198,13 @@ Rules of the road:
 ```bash
 docker run -d --name originless -p 3232:3232 \
   -e STORAGE_MAX=20GB \
-  -e SYNC_NODES=https://peer-a.example,https://peer-b.example \
   ghcr.io/besoeasy/originless:latest
 ```
 
-- Config auto-defaults; `PORT` (default 3232) and `STORAGE_MAX` (default 20GB) are the only knobs. `SYNC_NODES` is comma-separated peers that gossip events (union converge, verified on ingest).
+- Config auto-defaults; `PORT` (default 3232) and `STORAGE_MAX` (default 20GB) are the only knobs.
 - Events budget is `STORAGE_MAX / 5`; live events are evicted oldest-first when the cap is exceeded (surfaced at `/stats` as `events_evicted`).
-- State is ephemeral by design: `docker rm` deletes the event log and the IPFS repo. Peers rebuild the log on the next boot; files survive because you kept copies and re-anchor them. Mount a volume at `/data` only if you want a container that outlives itself.
+- State is ephemeral by design: `docker rm` deletes the event log and the IPFS repo. Nothing replicates between nodes, so publish to every node you need the event on; files survive because you kept copies and re-anchor them. Mount a volume at `/data` if you want a container that outlives itself.
 - Health/metrics: `/healthz` (app+node), `/stats`.
 - When orchestrating reverse proxies: `/events/stream` needs buffering disabled (`X-Accel-Buffering: no` already set in responses). HTTPS strongly recommended so browsers get `crypto.subtle` (the bundled dashboard has a fallback Ed25519 signer for plain-HTTP LANs).
 
-Pointer: the [reference](https://raw.githubusercontent.com/besoeasy/originless/main/reference.md) covers the full HTTP API table, event-protocol spec, configuration and architecture. Runnable client code (Go and Node publishers, SSE, pagination, uploads, the two-node demo, the re-anchor loop) lives in [examples.md](https://raw.githubusercontent.com/besoeasy/originless/main/examples.md), with the worked signing walkthrough example. The [README](https://raw.githubusercontent.com/besoeasy/originless/main/README.md) is the pitch and the use-case list. When you need API details, read reference and examples rather than guessing.
+Pointer: the [reference](https://raw.githubusercontent.com/besoeasy/originless/main/reference.md) covers the full HTTP API table, event-protocol spec, configuration and architecture. Runnable client code (Go and Node publishers, SSE, pagination, uploads, publishing to several nodes, the re-anchor loop) lives in [examples.md](https://raw.githubusercontent.com/besoeasy/originless/main/examples.md), with the worked signing walkthrough example. The [README](https://raw.githubusercontent.com/besoeasy/originless/main/README.md) is the pitch and the use-case list. When you need API details, read reference and examples rather than guessing.

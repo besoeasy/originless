@@ -24,7 +24,7 @@ operations, and the architecture. The pitch and use cases live in the
 | **Signed events** | Immutable, Ed25519-verified JSON documents with TTL expiry, stored in SQLite, never served after expiry. An Ed25519 signature is the only credential in the protocol — I deliberately made it the only one. |
 | **Live updates** | Server-Sent Events, no WebSocket server. Reconnecting clients resume from their last event ID. |
 | **IPFS uploads** | Files and folders addressed by CID through the embedded Kubo node. Unpinned, so treat a CID as a reference. |
-| **Federation** | `SYNC_NODES` makes nodes converge on the union of their event sets, re-verifying every signature on the way in. |
+| **Client replication** | Events are self-verifying and idempotent by `id`, so a client can publish the same bytes to several nodes and they agree without any server-to-server sync. |
 | **CORS everywhere** | Any origin may call the API — there are no credentials for a browser to withhold. |
 
 ## Why the files ride on IPFS
@@ -101,16 +101,16 @@ Originless didn't replace the whole Nostr story, but it exists because a design 
 is the surface mapping. A Nostr stack runs three things at once — **relays**
 for events, **Blossom-style blob servers** for files, and the discovery,
 authentication and proxying glue between them. Originless stands in for all of
-them behind one container, and adds the property the stack never had: the
-servers talk to each other.
+them behind one container.
 
 Relays do not replicate, so their problems become client problems: N
 independent sockets held open and written to, and a dead relay quietly taking
-its share of the log with it. Here nodes pull from each other over plain HTTP,
-re-verifying and converging on the union of their events — the fan-out stops
-being the client's problem, and a replaced node rebuilds from any surviving
-peer instead of taking history with it
-([why it is more resilient](#why-it-is-more-resilient)).
+its share of the log with it. Originless does not hide that trade — a node holds
+what was published to it. What it removes is the *cost* of replicating: an event
+is signed bytes with a content-derived ID, so publishing it to a second node is
+the same `POST` as the first, a duplicate is a no-op, and no node needs to know
+any other exists. The fan-out stays with the client, where you can see it
+([several nodes, one log](examples.md#8-several-nodes-one-log)).
 
 | Role | Normally | Here |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ peer instead of taking history with it
 | File fetch | `GET /<sha256>` on one host | `GET /cid/{cid}`, or any IPFS gateway |
 | Server discovery | NIP-65 `kind 10002` relay lists, a relay-finder entry point | one base URL |
 | Connection auth | NIP-42 challenge/response per connection | none — see [access control](#access-control) |
-| Replication | the client fans out; relays do not replicate | nodes pull from each other and converge |
+| Replication | the client fans out; relays do not replicate | the client fans out; nodes do not replicate |
 | Operations | N relays + blob servers + proxy + certs + relay payments | one container, one port, no infrastructure |
 
 ### Concept mapping
@@ -142,7 +142,7 @@ peer instead of taking history with it
 | `since` / `until` window | `?since` / `?until` |
 | NIP-96 blob servers | `/up`, `/cid/{cid}`, IPFS CIDs |
 | NIP-98 HTTP auth on upload | none |
-| NIP-65 relay lists | `SYNC_NODES` |
+| NIP-65 relay lists | none — the base URL is configured in the client |
 
 ### Why it is easier to connect to
 
@@ -164,28 +164,26 @@ peer instead of taking history with it
 
 ### Why it is more resilient
 
-- **A node dying is a rebuild, not data loss.** Its peers still hold the log,
-  and a replacement syncs from any of them. The event log is replicated; the
-  store is a cache of it.
-- **Convergence needs no coordinator.** Because the event ID is the hash of the
+- **A node dying loses only what was there.** Nothing replicates behind your
+  back, so if an event matters, publish it to more than one node or mount a
+  volume at `/data`. The event log is not a cache of some other copy.
+- **Agreement needs no coordinator.** Because the event ID is the hash of the
   signed bytes, "have I already got this?" is decidable without asking anyone.
-  Dedupe is free, so overlapping sync rounds cost nothing and every node settles
-  on the same set regardless of who published what, or in which order.
-- **Peers are verified, not trusted.** An imported event goes through the same
-  signature, TTL and drift checks as a publish, and a cursor never advances past
-  an event that was not stored. Controlling a socket does not entitle a node to
-  inject events.
-- **Checkpoints survive restarts.** Per-peer progress lives in SQLite, so
-  replacing a container resumes where it left off instead of re-ingesting
-  history.
+  Two nodes that receive the same event agree on its identity, and re-publishing
+  it is a no-op — so fan-out is a for-loop, not a protocol.
+- **Nothing is imported, so nothing is trusted.** There is no peer socket to
+  control. Every event entered through `POST /events` and passed the same
+  signature, TTL and drift checks as any other publish.
+- **No replication state to keep.** No checkpoints, no cursors, no topology to
+  configure, nothing that can silently fall behind or diverge.
 - **Less to keep alive.** One process, one port, nothing to babysit.
   Nothing to reconnect to, nothing to pay, nothing to reload in lockstep.
 
-**The exception is blobs.** Events replicate; uploads do not. Nothing is pinned,
-so garbage collection may drop the local copy — the blocks are advertised to the
-IPFS DHT and any gateway can serve them, but that is availability-by-others, not
-a guarantee. If you need durable blobs, keep a copy or pin them on a node you
-control.
+**The exception is blobs.** Neither events nor uploads replicate on their own.
+Nothing is pinned, so garbage collection may drop the local copy — the blocks
+are advertised to the IPFS DHT and any gateway can serve them, but that is
+availability-by-others, not a guarantee. If you need durable blobs, keep a copy
+or pin them on a node you control.
 
 ### Where the analogy breaks
 
@@ -233,12 +231,12 @@ docker run -d --name originless \
   ghcr.io/besoeasy/originless:latest
 ```
 
-Point clients at it. To remove the single point of failure that one container
-reintroduces, run a second node and let them converge:
+Point clients at it. A second node is another independent store, not a replica;
+if an event matters, have the client publish it to both:
 
 ```bash
-docker run -d --name o1 -p 127.0.0.1:3233:3232 -e SYNC_NODES=http://localhost:3234 ghcr.io/besoeasy/originless:latest
-docker run -d --name o2 -p 127.0.0.1:3234:3232 -e SYNC_NODES=http://localhost:3233 ghcr.io/besoeasy/originless:latest
+docker run -d --name o1 -p 127.0.0.1:3233:3232 ghcr.io/besoeasy/originless:latest
+docker run -d --name o2 -p 127.0.0.1:3234:3232 ghcr.io/besoeasy/originless:latest
 ```
 
 Details and limits are in [configuration](#configuration-and-operations), and
@@ -257,7 +255,7 @@ publish without an account.
 - [Validation rules](#validation-rules)
 - [Querying](#querying)
 - [Live streams](#live-streams)
-- [Federation](#federation-protocol)
+- [Client replication](#client-replication)
 
 ### The event document
 
@@ -294,7 +292,7 @@ The stored response adds:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Lowercase hex SHA-256 of the signing message. Doubles as the SSE event ID and the federation dedupe key. |
+| `id` | Lowercase hex SHA-256 of the signing message. Doubles as the SSE event ID and the dedupe key. |
 | `stored_at` | RFC 3339 UTC timestamp of when this node accepted the event. Node-local, not signed. |
 | `size` | Size in bytes of the request body as the client sent it. |
 
@@ -345,7 +343,7 @@ the server.
 - Republishing an identical event is a no-op — the server recognises the
   duplicate and answers `200` with `"duplicate": true` instead of `201`.
 - Two nodes that receive the same event from two different clients agree on its
-  identity, which is what makes federation converge.
+  identity, which is what makes client-side fan-out convergent.
 - `created_at` is part of the hash, so a client with a skewed clock produces a
   different event, not a conflicting one.
 
@@ -399,9 +397,8 @@ documented values with `go run ./scripts/example-event.go -documented`.
 
 ### Validation rules
 
-Every publish, and every event imported from a federation peer, runs through
-the same checks. The server answers `400` for a shape or rule violation and
-`401` for a signature that does not verify.
+Every publish runs through the same checks. The server answers `400` for a
+shape or rule violation and `401` for a signature that does not verify.
 
 | Rule | Limit |
 | --- | --- |
@@ -519,49 +516,47 @@ consumer cannot pin a handler forever: each frame is written under a write
 deadline, a failed write ends that stream, and a subscriber whose 64-slot queue
 overflows loses the oldest pending frame rather than stalling the publisher.
 
-### Federation protocol
+### Client replication
 
-Nodes converge on the **union** of each other's event sets by pulling over the
-same public HTTP API. There is no new protocol and no broker.
+There is no server-to-server replication. Each node is an independent store of
+the events published to it, and a client that wants its events in more than one
+place publishes them to each one. This is the same trade relays make — the
+fan-out is the client's job — but without the usual cost, because the write is
+idempotent and needs no coordination.
 
-This is the property that makes Originless a replacement for a relay rather than
-a different relay: relays do not replicate to each other, so a client holds N
-independent sockets and is responsible for writing to every one of them. Here the
-fan-out is the nodes' job. See [what this replaces](#what-this-replaces).
+The property that makes it cheap is already in the event format:
+
+- **`id` is the hash of the signed bytes**, so every node that receives the same
+  event computes the same identity. There is nothing to negotiate.
+- **Republishing is a no-op.** A second `POST` of the same body answers `200`
+  with `"duplicate": true`, so a retry or fan-out loop needs no bookkeeping.
+- **The second node verifies the same signature**, exactly as it would for any
+  other publish. A node never has to trust another node, because no node talks
+  to another.
 
 ```bash
-docker run -d --name o1 -p 127.0.0.1:3233:3232 -e SYNC_NODES=http://localhost:3234 ghcr.io/besoeasy/originless:latest
-docker run -d --name o2 -p 127.0.0.1:3234:3232 -e SYNC_NODES=http://localhost:3233 ghcr.io/besoeasy/originless:latest
+# Same signed body, two nodes, no relationship between them
+for node in http://localhost:3233 http://localhost:3234; do
+  curl -sS -X POST "$node/events" \
+    -H 'Content-Type: application/json' \
+    --data @/tmp/event.json
+done
 ```
 
-Every 5 seconds each node, per peer:
+What that means in practice:
 
-1. reads its checkpoint from the `peer_cursors` table (survives restart),
-2. `GET <peer>/events?limit=100&since=<checkpoint − 900s>`,
-3. rebuilds each event without its server-assigned fields,
-4. runs it through **the same validation as a publish** — signature, TTL,
-   drift — so a peer cannot inject forged events,
-5. dedupes on `id`, imports, and advances the checkpoint to the newest
-   `created_at` it saw.
+- **Reads are per node.** `GET /events?collection=…` on node A returns what was
+  published to node A, or restored from its `/data` volume. There is no
+  backfill from a peer.
+- **A dead node loses its log** unless you mounted a volume or published
+  elsewhere. Keep that in mind when choosing how many nodes a write goes to.
+- **Blobs never replicate either.** Upload to each node you want to hold a copy;
+  identical bytes produce the same CID, so the clients still agree on the name.
+- **No topology to maintain.** No peer list, no checkpoints, no cursor that can
+  silently fall behind, and no unauthenticated peer that can flood your event
+  budget.
 
-Details worth knowing:
-
-- **Checkpoints are on `created_at`, with a 15-minute lookback.** That window
-  matches the server's future-drift bound exactly, so an event a peer accepted
-  with a slightly-ahead clock still lands on the next round. Dedupe makes the
-  redundancy free.
-- **Skipping is deliberate.** An event that fails validation is logged and
-  skipped permanently; the checkpoint moves past it. A *persistence* failure is
-  not: the round aborts so the checkpoint never advances past an event that was
-  not stored.
-- **Events only.** IPFS blobs stay on the node that accepted them. A federated
-  event can reference a `blob` or a CID the receiving node cannot resolve.
-- **Clock skew matters.** Backdating an event beyond the 15-minute window is not
-  guaranteed to sync. Keep `created_at` at "now".
-
-A round reads at most 50 pages; the next round continues from wherever it got
-to, so a peer with a large backlog drains over several rounds instead of
-stalling the loop.
+[examples.md](examples.md#8-several-nodes-one-log) has the runnable version.
 
 ## HTTP API reference
 
@@ -891,13 +886,11 @@ configuration at all.
 | --- | --- | --- |
 | `STORAGE_MAX` | `20GB` | Soft limit for the IPFS repository. Accepts `KB`/`MB`/`GB`/`TB` (with or without `iB`), or a plain byte count. Also sets the event budget, below. Rejected below 1 MB. |
 | `PORT` | `3232` | HTTP port inside the container. Must be 1–65535. |
-| `SYNC_NODES` | *none* | Comma-separated base URLs of peer nodes to federate with. Each must start with `http://` or `https://`. |
 
 ```bash
 docker run -d --name originless \
   -p 3232:3232 \
   -e STORAGE_MAX=200GB \
-  -e SYNC_NODES=https://node-a.example,https://node-b.example \
   ghcr.io/besoeasy/originless:latest
 ```
 
@@ -907,7 +900,7 @@ interact with how uploads are stored: the IPFS garbage collector runs hourly at 
 `Routing.Type=dhtclient`. The startup line reports the effective values:
 
 ```text
-originless: settings storage_max="20GB" event_bytes_budget=4294967296 events_db="/data/events.db" sync_nodes=0
+originless: settings storage_max="20GB" event_bytes_budget=4294967296 events_db="/data/events.db"
 originless: storage max=20GB, GC watermark=90%, period=1h
 ```
 
@@ -915,16 +908,17 @@ originless: storage max=20GB, GC watermark=90%, period=1h
 
 ```text
 /data
-├── events.db        SQLite: signed events + per-peer sync checkpoints (plus -wal/-shm)
+├── events.db        SQLite: signed events (plus -wal/-shm)
 └── ipfs/            Kubo repository: blocks, config, keys
 ```
 
 Nothing here persists across container replacement, because state is ephemeral
 by design: `docker rm` deletes the event log *and* every uploaded CID, and
 those CIDs cannot be recovered from the public IPFS network — uploads are
-never pinned. A node rebuilds its event log from its peers on the next boot;
-files survive because *you* kept copies and re-anchor them. If you want a
-container that outlives itself instead, mount a volume at `/data`.
+never pinned. Nothing rebuilds the log on the next boot: a replacement node
+starts empty unless you mounted a volume or the clients publish to it again.
+Files survive because *you* kept copies and re-anchor them. If you want a
+container that outlives itself, mount a volume at `/data`.
 
 The container runs as an unprivileged `originless` user and only exposes
 `3232/tcp`. Kubo's HTTP API and the libp2p swarm stay on loopback inside the
@@ -969,42 +963,35 @@ For multi-user applications, enforce authorization in your own client or in a
 reverse proxy in front of Originless. The settings above are resource bounds,
 not access control.
 
-One deliberate trade-off worth naming: **peers are not authenticated**. A node
-listed in `SYNC_NODES` gets its events re-verified and re-stored, but it can also
-flood a node with valid-but-useless events until the byte budget evicts real
-ones. Only point `SYNC_NODES` at URLs you trust.
+### Running more than one node
 
-### Federation operations
+Nodes are independent and never talk to each other. Running two is still
+useful: it spreads load, and it lets a client keep a second copy of the events
+it cares about. That fan-out belongs to the client — there is nothing to
+configure on the node side.
 
-Set `SYNC_NODES` on each node to the other's base URL and they converge on the
-union of both event logs over plain HTTP, every 5 seconds. This is what removes
-the single point of failure a one-node deployment would otherwise have — compare
-a relay, which loses its share of the log when it goes away.
+Point the same client at both base URLs:
 
 ```bash
-docker run -d --name o1 -p 127.0.0.1:3233:3232 -e SYNC_NODES=http://localhost:3234 ghcr.io/besoeasy/originless:latest
-docker run -d --name o2 -p 127.0.0.1:3234:3232 -e SYNC_NODES=http://localhost:3233 ghcr.io/besoeasy/originless:latest
-```
-
-Publish on one node, query the other:
-
-```bash
-curl "http://localhost:3233/events?collection=notes"
+for node in http://localhost:3233 http://localhost:3234; do
+  curl -sS -X POST "$node/events" \
+    -H 'Content-Type: application/json' \
+    --data @/tmp/event.json
+done
 ```
 
 Operational notes:
 
-- **Events only.** IPFS blobs never move; a synced event may reference content
-  the other node cannot resolve.
-- **Checkpoints persist** in SQLite, so a restart resumes where it left off.
-- **Backdated events** beyond the 15-minute drift window may never sync. Keep
-  `created_at` at "now" on every client.
-- **First sync is incremental.** A peer with a large backlog drains over
-  several rounds (50 pages each); convergence is fast but not instant.
-- **Removed peers** are harmless — the stored checkpoint for an address you no
-  longer sync with is simply never read again.
+- **No backfill.** A node serves only what was published to it, or restored
+  from its `/data` volume. Querying node B will not show node A's events.
+- **Idempotent writes.** The same body to both nodes yields the same `id`, and a
+  repeat answers `duplicate: true`, so retries need no bookkeeping.
+- **Blobs are separate too.** Upload to each node you want to hold a copy;
+  identical bytes produce the same CID, so the name stays consistent.
+- **No peer attack surface.** Nothing ingests events on another node's behalf,
+  so there is no unauthenticated write path to defend.
 
-The protocol is described in full under [federation protocol](#federation-protocol).
+The runnable version is [several nodes, one log](examples.md#8-several-nodes-one-log).
 
 ### Observability
 
@@ -1069,7 +1056,7 @@ live `events.db` without stopping can capture a torn WAL; copy the `-wal` and
 | `507` on upload | Not enough free space on the spool filesystem for a 1 GiB upload. `/up` reserves headroom before reading the body. |
 | `413` on upload | Over the 1 GiB limit. Split the upload or use `/upf` per directory. |
 | `502 IPFS add failed` | The node rejected the add. `docker logs` for the Kubo side. |
-| Peers do not converge | Check `/healthz` on the peer, then clock skew: `created_at` is the sync key, and events backdated more than 15 minutes may be skipped. |
+| An event is missing on a second node | Expected: nodes do not replicate. Publish to each node, or read from the node the event went to. |
 | `400 cursor is not supported on the stream` | Use `Last-Event-ID` to resume a stream; `cursor` is list pagination only. |
 
 ## Architecture
@@ -1082,7 +1069,6 @@ makes, and which invariants are load-bearing.
 - [The event store](#the-event-store)
 - [Publish path](#publish-path)
 - [Live stream path](#live-stream-path)
-- [Federation path](#federation-path)
 - [IPFS boundary](#ipfs-boundary)
 - [Dashboard](#dashboard-implementation)
 - [Tests](#tests)
@@ -1095,31 +1081,28 @@ makes, and which invariants are load-bearing.
 cmd/originless         main: PORT, config, IPFS client, router, signal handling
 internal/config        environment parsing; derives the event byte budget
 internal/events        event schema, verification, store, reaper, filters, SSE, HTTP handler
-internal/sync          peer pull loop over the public /events endpoints
 internal/ipfs          minimal Kubo HTTP API client
 internal/server        router, CORS, embedded dashboard, stats/upload/cid/health handlers
 internal/testutil      test helpers: signs events with the same recipe as a client
 scripts/example-event.go   reproducible signed event used by the worked example in examples.md
 ```
 
-The dependency direction is one-way: `server` and `sync` both call into
-`events`; nothing calls back out. `events` knows nothing about HTTP routing
-beyond its own handler, which is why the same store can be driven by a client,
-a test, or a federation round.
+The dependency direction is one-way: `server` calls into `events`; nothing calls
+back out. `events` knows nothing about HTTP routing beyond its own handler, which
+is why the same store can be driven by a client or a test.
 
 ### Startup
 
 `main` does five things, in order: validate `PORT`, build the `config` from the
 environment, construct the IPFS client for `127.0.0.1:5001`, build the router,
 and serve until a signal arrives. On `SIGINT`/`SIGTERM` it cancels the root
-context (stopping the reaper and the sync loop), shuts the HTTP server down
+context (stopping the reaper), shuts the HTTP server down
 within 5 seconds, and closes the event database. `entry.sh` forwards the same
 signal to both the Go app and the Kubo daemon it supervises.
 
-`server.NewRouterWithOptions` opens the store, starts the hourly reaper, starts
-the federation loop when `SYNC_NODES` is set, and arranges for the store to
-close when the context is done. Everything long-lived hangs off that one
-context.
+`server.NewRouterWithOptions` opens the store, starts the hourly reaper, and
+arranges for the store to close when the context is done. Everything long-lived
+hangs off that one context.
 
 `ReadTimeout` and `WriteTimeout` are deliberately zero: a stream response must
 not be cut by a server-level deadline. Liveness is enforced per write instead,
@@ -1144,7 +1127,7 @@ periodic write consistent.
 
 At startup the store:
 
-1. creates the `events` and `peer_cursors` tables if absent,
+1. creates the `events` table if absent,
 2. deletes every row whose `expires_at` has passed,
 3. loads the survivors into the map,
 4. drops the oldest events if the store is over its byte budget.
@@ -1195,8 +1178,7 @@ POST /events
 ```
 
 `validateEvent` is a pure function of `(raw, now)`. That is what lets the
-publish path, the federation importer and the tests share one definition of
-"valid".
+publish path and the tests share one definition of "valid".
 
 ### Live stream path
 
@@ -1222,33 +1204,6 @@ forever.
 
 An unknown `Last-Event-ID` is not an error: the anchor is not in the store, so
 nothing is replayed and the stream continues live.
-
-### Federation path
-
-```text
-every 5s, per peer
-  → read the checkpoint from peer_cursors
-  → GET <peer>/events?limit=100&since=<checkpoint − 900s>[&cursor=…]
-  → for each event: rebuild the publishable form (drop id, stored_at, size)
-  → store.Accept(raw, now) → validateEvent + insert
-      · ErrInvalidEvent → log once, skip, let the checkpoint move past it
-      · anything else   → abort the round, leave the checkpoint where it was
-  → write the newest created_at back to peer_cursors
-```
-
-Two rules carry the correctness:
-
-- **Never trust, always verify.** Imported events go through the same
-  `validateEvent` as a publish, so a peer cannot inject forged events, or events
-  that claim to be ancient or long-lived.
-- **Never advance the cursor past unstored work.** Skipping is for events that
-  are *permanently* invalid. A transient persistence failure aborts the round,
-  because moving the checkpoint forward would silently drop that event forever.
-
-The 900-second lookback equals the server's future-drift bound: a peer may
-accept an event whose `created_at` is up to 15 minutes ahead, and without the
-lookback such an event would fall outside the next round's window and never be
-fetched. Dedupe on `id` makes the repeated fetches free.
 
 ### IPFS boundary
 
@@ -1313,7 +1268,6 @@ The tests that encode deliberate behaviour, rather than just exercising lines:
 | `TestEventQueryOmitsCursorOnLastPage` | A full page is the last page; no trailing request |
 | `TestEventOwnerIsCaseNormalized` | One key yields one id and matches any-case filters |
 | `TestPersistentStoreSurvivesReopen` | Durability across a simulated restart |
-| `TestSyncOnceRejectsForgedEvents` | Federation re-verifies, it does not trust |
 | `TestCIDLookupsAreOffline` | A CID is described from the local repository only |
 | `TestCIDInfoAgainstModernKubo` | `files/stat` answers the UnixFS stat current nodes serve |
 | `TestCIDInfoListsLinksForModernDirectory` | Directories are recognised without `NumLinks` |
@@ -1342,15 +1296,16 @@ the Go version `go.mod` declares.
 
 If you change one of these, the corresponding test should change with it:
 
-1. **`validateEvent` is the single definition of a valid event.** Publish and
-   federation import must never diverge.
+1. **`validateEvent` is the single definition of a valid event.** The publish
+   path and the tests must never diverge.
 2. **The signature covers `sha256(message)`, and `id` is that same digest.**
    Both are client-visible protocol, not implementation detail.
 3. **Canonicalization is part of the signature.** Key sorting and number
    preservation are what make `data` hashable.
 4. **Reads never mutate the retained set.** Only the reaper and eviction do.
 5. **Expired means invisible**, not deleted — and indistinguishable from absent.
-6. **A sync cursor never passes an event that was not stored.**
+6. **Identity is content-derived.** The same signed event must always reduce to
+   the same `id`, on every node, forever.
 7. **The IPFS node is never exposed.** Only port 3232 leaves the container.
 8. **Settings are resource bounds, never access control.** If a change makes a
    setting sound like a security control, the documentation needs to change too.
@@ -1382,7 +1337,7 @@ go test ./...     # test
 ./podman.sh       # build the image and run it locally, foreground, --rm
 ```
 
-The app reads `PORT`, `STORAGE_MAX` and `SYNC_NODES`; outside the container it
+The app reads `PORT` and `STORAGE_MAX`; outside the container it
 also wants `/data` writable, or point `config.EventsDBPath` elsewhere in code.
 See [architecture](#architecture).
 

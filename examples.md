@@ -1,8 +1,9 @@
 # Originless examples
 
 Every task worth automating against an Originless node, with working code. I
-keep the recipe simple: run the node on two computers, upload on one, and pull
-it through the other — each snippet below is one slice of that deal.
+keep the recipe simple: run a node, publish signed events to it, upload files
+to it, and keep your own copy of anything that must survive — each snippet below
+is one slice of that deal.
 
 Unless a snippet says otherwise, point it at your node with the `ORIGIN`
 environment variable (default `http://localhost:3232`). I tested everything here
@@ -21,7 +22,7 @@ for free. The last section shows the loop.
 - [5. Watch events arrive (SSE)](#5-watch-events-arrive-sse)
 - [6. Query and paginate events](#6-query-and-paginate-events)
 - [7. Uploads up close](#7-uploads-up-close)
-- [8. Two computers, one file](#8-two-computers-one-file)
+- [8. Several nodes, one log](#8-several-nodes-one-log)
 - [9. Keep your copy: the re-anchor loop](#9-keep-your-copy-the-re-anchor-loop)
 
 ## 1. Publish a signed event (Go, zero dependencies)
@@ -441,44 +442,53 @@ pinned** — garbage collection can reclaim any node's copy, the same copy
 lives wherever someone else fetched and kept it, and re-uploading re-anchors
 it (last section).
 
-## 8. Two computers, one file
+## 8. Several nodes, one log
 
-This is the demo of the whole pitch: two nodes, one file, no shared server
-between them — and no volumes, because I decided nodes are disposable and the
-event log re-converges from peers by design.
-
-```bash
-# Computer A (or both containers on one machine)
-docker run -d --name o1 -p 127.0.0.1:3233:3232 \
-  -e SYNC_NODES=http://localhost:3234 \
-  ghcr.io/besoeasy/originless:latest
-
-# Computer B — knows nothing until it pulls from A
-docker run -d --name o2 -p 127.0.0.1:3234:3232 \
-  -e SYNC_NODES=http://localhost:3233 \
-  ghcr.io/besoeasy/originless:latest
-```
-
-Publish an event on `o1` (any snippet above, `ORIGIN=http://localhost:3233`).
-Every 5 seconds each node pulls the other's new events, and I re-verify every
-signature with the same rules a publish would face — a peer cannot inject
-forgery for free. Watch it from `o2`, which knows nothing beyond `SYNC_NODES`:
+There is no server-to-server replication. If you want the same events on more
+than one node, your client publishes the same signed bytes to each one:
+signature and `id` are derived from the event content, so every node computes
+the same identity and duplicate suppression is automatic.
 
 ```bash
-curl http://localhost:3234/events?collection=demo/notes
-# → the event published on o1, signature and all, now on the other node
+# Two independent nodes; neither knows the other exists
+docker run -d --name o1 -p 127.0.0.1:3233:3232 ghcr.io/besoeasy/originless:latest
+docker run -d --name o2 -p 127.0.0.1:3234:3232 ghcr.io/besoeasy/originless:latest
+
+# Generate the signed event once
+go run ./scripts/example-event.go -body /tmp/event.json
+
+# Publish the identical body to both
+for node in http://localhost:3233 http://localhost:3234; do
+  curl -sS -X POST "$node/events" \
+    -H 'Content-Type: application/json' \
+    --data @/tmp/event.json
+  echo
+done
 ```
 
-Files do the same — upload on one node, fetch through the other:
+Both responses carry the same `id`. Publish a second time and each node answers
+`200` with `"duplicate": true` instead of `201` — the write is idempotent, so a
+retry loop needs no bookkeeping.
+
+Reads are per node: `GET /events?collection=demo/notes` returns what was
+published to that node, or restored from its volume. That is the trade — you
+choose the topology, and no node guesses it for you.
+
+Files work the same way. Upload the same bytes to each node you want a copy on;
+because a CID is the hash of the bytes, every upload of identical content yields
+the same name, and each node serves the copies it holds:
 
 ```bash
-printf 'content addressed\n' | curl -sS -F "file=@-" http://localhost:3233/up
-curl -sS http://localhost:3234/cid/<cid> && echo same bytes, other node
+printf 'content addressed\n' > memo.txt
+for node in http://localhost:3233 http://localhost:3234; do
+  curl -sS -F "file=@memo.txt" "$node/up"
+  echo
+done
 ```
 
-No broker, no special protocol — plain HTTP `GET /events`, verified and deduped
-by `id`. That's the whole federation story; I deliberately wrote nothing else
-to maintain.
+No broker, no special protocol — just `POST /events` twice with the same body.
+The nodes agree because the events are self-verifying, not because they talk to
+each other.
 
 ## 9. Keep your copy: the re-anchor loop
 

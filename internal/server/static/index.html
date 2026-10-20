@@ -712,40 +712,40 @@
         </div>
         <div class="mini-card reveal" style="border-top-color:var(--color-orange);">
           <span class="mini-emoji">🔁</span>
-          <h3>Federation</h3>
-          <p class="mini-sub">Nodes Converge, Not Clients</p>
-          <p>Set <code>SYNC_NODES</code> and nodes pull from each other over plain HTTP every five seconds, re-verifying every signature and converging on the union of their event logs. A node dying is a rebuild from any peer, not data loss.</p>
-          <p class="replaces"><strong>Replaces:</strong> Nostr relays, Matrix homeservers</p>
+          <h3>Client Replication</h3>
+          <p class="mini-sub">Idempotent Writes, No Peers</p>
+          <p>Every event is signed and identified by its content hash, so writing the same event to a second node is the same <code>POST</code> as the first — and a repeat is a no-op. You choose where a write goes; nodes never talk to each other.</p>
+          <p class="replaces"><strong>Replaces:</strong> Nostr relay fan-out, broker replication</p>
         </div>
       </div>
     </section>
 
-    <section id="federation">
-      <p class="eyebrow"><span class="marker">[*]</span> Federation</p>
-      <h2 class="section-title reveal">Two nodes, one event log.</h2>
-      <p class="lede reveal">Point two Originless containers at each other with <code>SYNC_NODES</code> and they converge on the same set of signed events. I put the replication inside the nodes so you don't run a broker, or anything else.</p>
+    <section id="replication">
+      <p class="eyebrow"><span class="marker">[*]</span> Replication</p>
+      <h2 class="section-title reveal">Clients replicate. Nodes don't.</h2>
+      <p class="lede reveal">There is no server-to-server sync and no peer list to configure. If an event belongs on two nodes, your client publishes the same signed bytes to both. They agree because the event is self-verifying, not because they gossip.</p>
       <div class="panel reveal">
         <ul class="tick-list">
-          <li><span class="verdict-good">✓</span><span><strong>Plain HTTP pull:</strong> every 5s each node fetches <code>GET /events?since=...</code> from its peers and imports what it lacks.</span></li>
-          <li><span class="verdict-good">✓</span><span><strong>Verified, not trusted:</strong> imported events are re-validated with the same Ed25519 signature check as a fresh publish; forged events are dropped.</span></li>
-          <li><span class="verdict-good">✓</span><span><strong>Resumable:</strong> each node stores its per-peer checkpoint in SQLite, so a restart continues where it left off.</span></li>
-          <li><span class="verdict-good">✓</span><span><strong>Events only:</strong> state you share is the signed event log — IPFS blobs stay on the node that accepted them.</span></li>
+          <li><span class="verdict-good">✓</span><span><strong>Idempotent writes:</strong> <code>id</code> is the hash of the signed bytes, so a repeat publish answers <code>200</code> with <code>"duplicate": true</code> instead of storing a second copy.</span></li>
+          <li><span class="verdict-good">✓</span><span><strong>Verified at ingest:</strong> every event passes the same Ed25519 signature, TTL and drift checks — a node does not need to trust another node, because it never speaks to one.</span></li>
+          <li><span class="verdict-good">✓</span><span><strong>No topology to maintain:</strong> no checkpoints, no cursors, no unauthenticated peer that can flood your event budget.</span></li>
+          <li><span class="verdict-good">✓</span><span><strong>Per-node reads:</strong> a node serves what was published to it or restored from its volume. No silent backfill from somewhere else.</span></li>
         </ul>
       </div>
       <div class="panel reveal" style="margin-top:1rem;">
-        <p class="body-text"><strong>Why this replaces a relay rather than being one.</strong> Nostr relays do not replicate to each other, so a client holds N independent WebSocket subscriptions and is responsible for writing to every one of them — and a relay that disappears takes its share of the log with it. Here the fan-out belongs to the nodes: each one pulls, verifies and re-serves, so a replaced node rebuilds from any surviving peer. <a href="https://github.com/besoeasy/originless/blob/main/reference.md#what-this-replaces">Full mapping and honest limits →</a></p>
+        <p class="body-text"><strong>The honest trade.</strong> A Nostr relay does not replicate either — a client holds N sockets and writes to every one. Originless keeps that shape but removes the cost: the same body is a valid write anywhere, and a retry needs no bookkeeping. What you give up is automatic rebuild — if a node dies, its log dies with it unless you mounted <code>/data</code> or published elsewhere. Publish to the nodes you need, and keep your own copies of files. <a href="https://github.com/besoeasy/originless/blob/main/reference.md#client-replication">Details →</a></p>
       </div>
     </section>
 
     <section id="persistence">
       <p class="eyebrow"><span class="marker">[*]</span> Persistence</p>
       <h2 class="section-title reveal">Ephemeral by design.</h2>
-      <p class="lede reveal">State lives under <code>/data</code> in the container filesystem — a SQLite events database plus the embedded Kubo repository — and it lives by the container's lifetime. A replaced container is a fresh node; it rebuilds its event log from its peers.</p>
+      <p class="lede reveal">State lives under <code>/data</code> in the container filesystem — a SQLite events database plus the embedded Kubo repository — and it lives by the container's lifetime. A replaced container is a fresh node: its event log is gone unless you mounted a volume, and the nodes do not backfill each other.</p>
       <div class="panel reveal">
         <pre style="overflow-x:auto; font-size:0.8rem;"><code>/data
-├── events.db        # SQLite: signed events + sync checkpoints
+├── events.db        # SQLite: signed events
 └── ipfs/            # Kubo repository (blocks, pins, config)</code></pre>
-        <p class="body-text" style="margin-top:1rem;">Durability is a choice, not a default: mount a volume at <code>/data</code> only if you want the container to outlive itself — otherwise keep your own copies and let peers rebuild. Stored events are capped at a fifth of <code>STORAGE_MAX</code>; beyond that, the oldest live events are evicted. TTL-expired events are never served and are reaped hourly.</p>
+        <p class="body-text" style="margin-top:1rem;">Durability is a choice, not a default: mount a volume at <code>/data</code> only if you want the container to outlive itself — otherwise keep your own copies and publish what matters to more than one node. Stored events are capped at a fifth of <code>STORAGE_MAX</code>; beyond that, the oldest live events are evicted. TTL-expired events are never served and are reaped hourly.</p>
       </div>
     </section>
 
