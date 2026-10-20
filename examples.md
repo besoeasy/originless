@@ -1,16 +1,18 @@
 # Originless examples
 
-Working code for every common task against an Originless node. Originless is a
-protocol, not an app: run it on two computers, and anything you upload to one
-can be pulled through the other. Everything here shows one slice of that.
+Every task worth automating against an Originless node, with working code. I
+keep the recipe simple: run the node on two computers, upload on one, and pull
+it through the other — each snippet below is one slice of that deal.
 
 Unless a snippet says otherwise, point it at your node with the `ORIGIN`
-environment variable (default `http://localhost:3232`) — or at the free public
-node `https://originless.space`, as these snippets were verified against it.
+environment variable (default `http://localhost:3232`). I tested everything here
+against the free public node, `https://originless.space`, so the outputs shown
+are real.
 
-But keep one rule in mind: **a copy of any file you want permanently shared
-stays with you.** Uploads are not pinned; if a CID stops resolving, re-uploading
-the same bytes re-anchors it for free. The last section below shows the loop.
+One rule before you start, because I break it for you in these examples: **the
+copy of any file you want permanently shared stays with you.** Uploads are not
+pinned; when a CID stops resolving, re-uploading the same bytes re-anchors it
+for free. The last section shows the loop.
 
 - [1. Publish a signed event (Go, zero dependencies)](#1-publish-a-signed-event-go-zero-dependencies)
 - [2. Publish a signed event (Node 18+, zero dependencies)](#2-publish-a-signed-event-node-18-zero-dependencies)
@@ -207,16 +209,17 @@ HTTP/1.1 201 Created
 {"id":"5c1f…","status":"success","stored_at":"2026-10-16T12:04:11Z"}
 ```
 
-Run it twice: the second time the same bytes are already known, so the node
-answers `200` with `"duplicate": true`. The `id` is derived from the signed
-content, not assigned randomly.
+Run it twice and note the free behavior: the same signed bytes are already
+known the second time, so the node answers `200` with `"duplicate": true`. The
+`id` is derived from the signed content — I never hand out random IDs.
 
 ## 2. Publish a signed event (Node 18+, zero dependencies)
 
-The same recipe in Node. The three things that trip everyone up are already
-done in this listing: the `data` keys must be in **sorted order** (canonical
-form), the signature covers the **32-byte digest** (not the message text), and
-`owner` is always the lower-case hex of the 32-byte public key.
+The same recipe in Node, since that's what half the world types in. I got
+`401 bad sig` twice on my way to this working listing, so learn from me: the
+`data` keys must be in **sorted order** (canonical form), the signature covers
+the **32-byte digest** (not the message text), and `owner` is always the
+lower-case hex of the 32-byte public key. All three are already done below.
 
 Save as `publish.cjs`:
 
@@ -331,9 +334,10 @@ Signature of that digest:
 abbeb588751339d096924dc891cf49c20ebec47841cb544fae9ad67e042c081e5cbba6a3a414e89431bd4c2997f8b2e457174a90497e9abb8f78202897725d05
 ```
 
-The timestamps above are deliberately in the past so the values stay fixed, and
-a node will refuse that event as already expired. To get a body you can actually
-publish, let the tool stamp current times and write the request body out:
+The timestamps above are deliberately in the past so the values stay fixed
+forever — but a node will rightly refuse that event as expired. To get a body
+you can actually publish, let the tool stamp current times and write the
+request body out:
 
 ```bash
 go run ./scripts/example-event.go -body /tmp/event.json
@@ -348,8 +352,9 @@ curl -X POST http://127.0.0.1:3232/events \
 
 ## 5. Watch events arrive (SSE)
 
-`GET /events/stream` is Server-Sent Events. Any browser reaches it with
-`EventSource`; a terminal with `curl -N`. No WebSocket, no library.
+Live updates through Server-Sent Events. A browser opens it with `EventSource`,
+a terminal with `curl -N`. I didn't build a WebSocket server because this is
+simpler and works everywhere.
 
 ```bash
 curl -N "$ORIGIN/events/stream?collection=demo/notes"
@@ -365,8 +370,8 @@ data: {"id":"5c1f8b…","collection":"demo/notes","data":{"at":1759…,"note":"h
 ```
 
 Every frame carries an `id`, so a browser `EventSource` that drops and returns
-resumes from where it left off. A `curl` client that reconnects can do the same
-by passing `-H 'Last-Event-ID: <id>'`.
+wakes up right where it stopped. A `curl` client does the same by passing
+`-H 'Last-Event-ID: <id>'`.
 
 ```js
 // Browser: reconnect + resume is built in, and the server replays the
@@ -383,9 +388,9 @@ plain `GET /events` endpoint (next section), not the stream.
 
 ## 6. Query and paginate events
 
-`GET /events` filters the live set; all parameters are optional (`collection`,
-`label`, `owner`, `search`, `blob`, `since`, `until`, `limit` 1–100, `cursor`).
-Results come newest-first:
+History lives at `GET /events`. Filter the live set with any of `collection`,
+`label`, `owner`, `search`, `blob`, `since`, `until`, `limit` (1–100), or
+`cursor`. Newest first:
 
 ```bash
 curl "$ORIGIN/events?collection=demo/notes&limit=50"
@@ -410,8 +415,8 @@ done
 
 ## 7. Uploads up close
 
-The README quick start shows the single-file upload; the pieces worth knowing beyond
-it:
+The quick start already showed the single-file upload. Here's what's worth
+knowing beyond it:
 
 ```bash
 # Upload a whole folder, structure preserved (multipart paths are kept)
@@ -422,24 +427,25 @@ curl -F "file=@./site/index.html" -F "file=@./site/logo.png" "$ORIGIN/upf"
 `"mime": "inode/directory"` — upload both files and the CIDs you get back are
 the folder and its children.
 
-A CID is a name for the bytes, not a location, so fetch it back through any
-holder — your node, another node, or any IPFS gateway:
+A CID is a name for the bytes, not a location. So fetch it back through
+whoever holds them — your node, another node, any IPFS gateway:
 
 ```bash
 curl -sS "$ORIGIN/cid/<cid>"          # through whichever node you run
 curl -sS "https://ipfs.io/ipfs/<cid>" # or any gateway; the bytes are what matter
 ```
 
-Verify what arrived: the CID *is* the hash of the bytes, so a client can check
-it rather than trust the host. Uploads are **not pinned**, so a node's copy is
-reclaimable by garbage collection — the same copy lives wherever someone else
-fetched it, and re-uploading re-anchors it (last section).
+Check what arrived before you trust it: the CID *is* the hash of the bytes, so
+the client verifies it and no host has to be believed. Uploads are **not
+pinned** — garbage collection can reclaim any node's copy, the same copy
+lives wherever someone else fetched and kept it, and re-uploading re-anchors
+it (last section).
 
 ## 8. Two computers, one file
 
-The protocol's core demo: two nodes, one file, and no shared server between
-them. No volumes anywhere — nodes are disposable; the event log re-converges
-from peers by design.
+This is the demo of the whole pitch: two nodes, one file, no shared server
+between them — and no volumes, because I decided nodes are disposable and the
+event log re-converges from peers by design.
 
 ```bash
 # Computer A (or both containers on one machine)
@@ -454,31 +460,32 @@ docker run -d --name o2 -p 127.0.0.1:3234:3232 \
 ```
 
 Publish an event on `o1` (any snippet above, `ORIGIN=http://localhost:3233`).
-Every 5 seconds each node pulls the other's new events, re-verifying every
-signature with the same rules a publish would face. So on `o2`, with no config
-beyond `SYNC_NODES`:
+Every 5 seconds each node pulls the other's new events, and I re-verify every
+signature with the same rules a publish would face — a peer cannot inject
+forgery for free. Watch it from `o2`, which knows nothing beyond `SYNC_NODES`:
 
 ```bash
 curl http://localhost:3234/events?collection=demo/notes
 # → the event published on o1, signature and all, now on the other node
 ```
 
-Files do the same: upload on one node, fetch through the other
+Files do the same — upload on one node, fetch through the other:
 
 ```bash
 printf 'content addressed\n' | curl -sS -F "file=@-" http://localhost:3233/up
 curl -sS http://localhost:3234/cid/<cid> && echo same bytes, other node
 ```
 
-No broker, no special protocol: plain HTTP `GET /events`, verified and deduped
-by `id`. That is the whole federation story of Originless.
+No broker, no special protocol — plain HTTP `GET /events`, verified and deduped
+by `id`. That's the whole federation story; I deliberately wrote nothing else
+to maintain.
 
 ## 9. Keep your copy: the re-anchor loop
 
-What keeps a file permanently shared is not the node — it is the habit: keep
-the originals in a directory, and re-anchor by re-uploading. Same bytes → same
-CID, so a re-upload is a no-op re-index, not a duplicate; most clients do this
-automatically. A minimal script to run from cron:
+Here is the habit that keeps a file permanently shared: the node doesn't, *you*
+do. Keep the originals in a directory and re-anchor by re-uploading. Same
+bytes → same CID, so a re-upload is a no-op re-index, not a second copy on the
+node; most clients do it automatically. This is my minimal cron script:
 
 ```bash
 #!/usr/bin/env bash
@@ -497,6 +504,7 @@ done
 # QmcptBFh2jvTxnroRqGvqVpAkXVvtFM7vZxogrWcbhCgaR  hello.txt
 ```
 
-Run it as often as you like — identical bytes answer `200` on the second pass.
-The durable copy is the directory on your disk; the network refreshes itself
-around whichever CID people ask for and whatever you re-anchor.
+Run it as often as you like — identical bytes answer `200` on the second pass,
+which is exactly the point. The durable copy is the directory on your disk;
+the network refreshes itself around whichever CID people ask for and whatever
+you re-anchor.
