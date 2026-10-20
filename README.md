@@ -56,6 +56,31 @@ is in the [quickstart](docs/quickstart.md).
 | **Federation** | `SYNC_NODES` makes nodes converge on the union of their event sets, re-verifying every signature on the way in. |
 | **CORS everywhere** | Any origin may call the API — there are no credentials for a browser to withhold. |
 
+## Why the files ride on IPFS
+
+The event store and the live stream are what make Originless compact. The IPFS
+layer is what makes its content *self-verifying and host-independent*: uploads
+are not files parked behind this service's URL, they are content-addressed
+blocks whose name (the CID) is the hash of the bytes themselves.
+
+- **The name proves the bytes.** Whatever serves a block — this node, a public
+  gateway, a peer who pinned it — the client can verify it against the CID
+  before trusting it. There is no "believe the host" step, and a tampered copy
+  cannot still answer to the same name.
+- **Content is not hostage to one host.** Any IPFS gateway can serve a CID
+  whose blocks live somewhere reachable, and this node is only one possible
+  home among them. Taking content down becomes a distributed chase across
+  holders and mirrors, not a request to one server.
+- **Readers can stay private.** A fetch needs the CID, not the origin: pull
+  from any gateway — or straight off the swarm — without ever speaking to the
+  node that first held the upload. The origin's access log cannot profile its
+  readers if it is never in the read path.
+
+The trade, stated plainly: uploads are not pinned here, so this node's own copy
+is reclaimable by garbage collection, and "still out there" is
+availability-by-others, not a promise. Pin what must survive — see
+[configuration → sizing storage](docs/configuration.md#sizing-storage).
+
 ## What this replaces
 
 Originless stands in for three services that are normally deployed separately:
