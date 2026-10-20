@@ -410,7 +410,7 @@ done
 
 ## 7. Uploads up close
 
-The quick start shows the single-file upload; the pieces worth knowing beyond
+The README quick start shows the single-file upload; the pieces worth knowing beyond
 it:
 
 ```bash

@@ -733,7 +733,7 @@
         </ul>
       </div>
       <div class="panel reveal" style="margin-top:1rem;">
-        <p class="body-text"><strong>Why this replaces a relay rather than being one.</strong> Nostr relays do not replicate to each other, so a client holds N independent WebSocket subscriptions and is responsible for writing to every one of them — and a relay that disappears takes its share of the log with it. Here the fan-out belongs to the nodes: each one pulls, verifies and re-serves, so a replaced node rebuilds from any surviving peer. <a href="https://github.com/besoeasy/originless#what-this-replaces">Full mapping and honest limits →</a></p>
+        <p class="body-text"><strong>Why this replaces a relay rather than being one.</strong> Nostr relays do not replicate to each other, so a client holds N independent WebSocket subscriptions and is responsible for writing to every one of them — and a relay that disappears takes its share of the log with it. Here the fan-out belongs to the nodes: each one pulls, verifies and re-serves, so a replaced node rebuilds from any surviving peer. <a href="https://github.com/besoeasy/originless/blob/main/reference.md#what-this-replaces">Full mapping and honest limits →</a></p>
       </div>
     </section>
 
@@ -756,7 +756,7 @@
         <pre style="overflow-x:auto; font-size:0.8rem;"><code># 1. Upload a file, get back a CID
 curl -F "file=@hello.txt" http://localhost:3232/up
 
-# 2. Publish a signed event (signing recipe in the README / examples.md)
+# 2. Publish a signed event (signing recipe in examples.md)
 curl -X POST http://localhost:3232/events \
   -H "Content-Type: application/json" \
   -d '{"owner":"ed25519:...","collection":"chat","created_at":...,"expires_at":...,"data":{...},"labels":[],"sig":"..."}'
