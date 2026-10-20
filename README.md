@@ -374,6 +374,24 @@ held the bytes. The server is an anonymous, disposable landing spot for
 content-addressed data; identity lives in keys, and persistence lives in the
 client-side re-upload loop.
 
+## Why Originless was created
+
+It started as a replacement for Nostr's Blossom servers.
+
+They irritated me — the protocol tells clients "these few hosts hold the files", so the whole ecosystem funneled onto a couple of popular servers. That works if your internet sees the world with no blanket bans. Then you travel.
+
+I have been in a few countries where a Nostr feed loaded fine and *nothing* followed it, because those two popular media servers were simply on the list. Avatars dead, every image broken, half of every post — and the protocol has exactly one place to fetch the bytes from, so there is no "elsewhere" to reach for. That is the centralization nobody on a Nostr poster in an uncensored country ever sees: not an ideology, a literal short list of URLs.
+
+The strangest part was watching the ecosystem talk about censorship resistance while real bans untuned their media. The designers and popular tool builders lived in countries where no call to their infrastructure is ever blocked, so a server being unreachable never entered their failure model. Meanwhile the places with the strongest reason to care — the Middle East and its blanket bans — were exactly where the design stopped working, and that didn't move the roadmap.
+
+Originless is my answer to all of that:
+
+- **A CID is the address**, so the file does not live "on a server" — it lives wherever any holder of the blocks can resolve the name. Banning one host, or ten, does not take the file down; there is no one URL to ban. [Why the files ride on IPFS](#why-the-files-ride-on-ipfs).
+- **Whoever fetched the file holds a copy.** If your copy gets garbage collected, someone's re-upload re-anchors it. Durability lives in the crowd, not in agreements.
+- **Events replicate** instead of everyone watching one relay, so app state does the same thing: no single point to reach for, no list of favourite hosts to lose.
+
+Originless didn't replace the whole Nostr story, but it exists because a design shouldn't silently fail for the people with the least reliable view of the network — the ones who most need it to work.
+
 ## What this replaces
 
 Most real-time apps on the Nostr stack run three separate things: one or more
