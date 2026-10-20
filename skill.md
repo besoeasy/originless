@@ -7,7 +7,7 @@ metadata:
 
 # Using Originless
 
-Originless is a single-container backend with exactly two primitives:
+I built Originless as a single-container backend with exactly two primitives:
 
 1. **Signed events** — immutable, Ed25519-verified JSON documents (≤ 8 KiB, TTL ≤ 1 year) stored in SQLite, queryable, and streamable live over Server-Sent Events.
 2. **Content-addressed uploads** — files/folders turned into IPFS blocks addressed by CID, fetchable by anyone with the CID from any IPFS gateway.
@@ -16,17 +16,17 @@ There are **no accounts, no tokens, no delete API, and CORS is `*`**. An Ed25519
 
 ## The free public node: `https://originless.space/`
 
-The project's maintainer runs a free instance:
+I run a free node, and you're welcome to it:
 
 - Base URL: `https://originless.space/`
 - Status check first: `curl https://originless.space/healthz` → `{"status":"ok","ipfs":"ok"}`; usage metrics at `/stats`.
 - Fair use: it is a shared landing spot, not an archive. Events resolve in your own code's cleanup (TTL expiry), don't flood (≤ a few events/second), and treat uploaded CIDs as reclaimable (garbage collection is hourly at a 90% watermark).
 - Because there is no ACL: on `originless.space` you must assume another tenant may publish to the same collection. Design around that (see "Avoiding collisions").
 
-Prefer self-hosting one container for anything serious; use `originless.space` as the free example / demo node.
+I'd rather you self-hosted for anything serious; use `originless.space` as the free example / demo node.
 
 ```bash
-docker run -d --name originless -p 3232:3232 -v originless-data:/data \
+docker run -d --name originless -p 3232:3232 \
   ghcr.io/besoeasy/originless:latest
 ```
 
@@ -66,7 +66,7 @@ Body sent to `POST /events`:
 
 Do **not** include `id`, `stored_at`, or `size` in the request body (server rejects them), no trailing JSON, no unknown fields.
 
-### Proven Node.js ≥ 18 snippet (verified against the live node)
+### Proven Node.js ≥ 18 snippet (tested live, it posts)
 
 ```js
 const crypto = require('node:crypto');
@@ -149,9 +149,9 @@ curl "https://originless.space/cid/<cid>"
 
 Rules of the road:
 
-- Only pin=true NOT used → replies `{"cid": "...", "size": N, "mime": "..."}`; **nothing is pinned**; GC may reclaim; store a local copy if you need the bytes to survive.
+- The reply is `{"cid": "...", "size": N, "mime": "..."}`, and **nothing is pinned**; GC may reclaim, so keep a local copy if you need the bytes to survive.
 - A CID is **the hash of the bytes** — re-uploading identical bytes is a no-op re-add that yields the same CID. Keep each item's `cid` in your own manifest and re-`POST` when `/cid/{cid}` shows `"available": false` if you need continuous reachability.
-- Verify-by-default: when you fetch from any IPFS gateway (`/cid/<cid>` locally, or https://inbrowser.link/ipfs/*.ipfs/ipfs/<cid>, ipfs.io), the bytes must hash to the CID — no trust needed in whichever mirror served them.
+- Verify-by-default: when you fetch from any IPFS gateway (`/cid/<cid>` locally, or https://inbrowser.link/ipfs/*.ipfs/ipfs/<cid>, ipfs.io), the bytes must hash to the CID — you never have to trust whichever mirror served them.
 - 1 GiB hard upload cap; > 8 KiB payloads in events go by CID reference in `data`.
 
 **Almost every "uploads" flow wants an event too:** upload file → publish an event whose `data` mentions the CID (and a human-readable `name`, `summary`, `mime`). The event is how peers *learn* the CID; the CID is how anyone *fetches* the bytes from any node/gateway.
@@ -178,7 +178,7 @@ Rules of the road:
 1. **Namespace everything**: `collection` must match `^[a-z0-9/_\-]{1,32}$` (lowercase, digits, `_`, `-`, `/`). Use `<product>/<app>/<resource>`; never a bare `test`.
 2. **Labels are your filter DSL**, not free text. Prefer `app:<name>`, `type:<kind>`, `ver:<n>` so reads stay cheap (`?label=` is an exact match).
 3. **One event, one meaning.** Events are immutable; changing state means publishing a *new* event (new `id`), never "editing".
-4. **Assume a hostile tenant** on `originless.space`: anyone can write into your collection. Mitigate by (a) verifying the signature in `owner` when reading, (b) filtering with `owner=<your base64>`, and (c) treating unknown-owner rows as noise. For strong guarantees, run your own node where the port is only reachable by your client.
+4. **Assume a hostile tenant** on `originless.space`: anyone can write into your collection. Mitigate by (a) verifying the signature in `owner` when reading, (b) filtering with `owner=<your owner hex>`, and (c) treating unknown-owner rows as noise. For stronger guarantees, run your own node where the port is only reachable by your client.
 5. **No retries needed beyond persistence errors**: an identical republish is a clean no-op (`duplicate: true`) because `id` is derived from signed content.
 6. **Expires are real.** Expired events stop being served immediately (they `404`), and the reaper deletes them hourly — don't rely on the event existing after `expires_at`.
 
@@ -196,7 +196,7 @@ Rules of the road:
 ## Self-hosting & ops (when `originless.space` won't do)
 
 ```bash
-docker run -d --name originless -p 3232:3232 -v originless-data:/data \
+docker run -d --name originless -p 3232:3232 \
   -e STORAGE_MAX=20GB \
   -e SYNC_NODES=https://peer-a.example,https://peer-b.example \
   ghcr.io/besoeasy/originless:latest
@@ -204,7 +204,7 @@ docker run -d --name originless -p 3232:3232 -v originless-data:/data \
 
 - Config auto-defaults; `PORT` (default 3232) and `STORAGE_MAX` (default 20GB) are the only knobs. `SYNC_NODES` is comma-separated peers that gossip events (union converge, verified on ingest).
 - Events budget is `STORAGE_MAX / 5`; live events are evicted oldest-first when the cap is exceeded (surfaced at `/stats` as `events_evicted`).
-- Everything durable is under `/data` (`events.db`, the Kubo repo). Mount a volume.
+- State is ephemeral by design: `docker rm` deletes the event log and the IPFS repo. Peers rebuild the log on the next boot; files survive because you kept copies and re-anchor them. Mount a volume at `/data` only if you want a container that outlives itself.
 - Health/metrics: `/healthz` (app+node), `/stats`.
 - When orchestrating reverse proxies: `/events/stream` needs buffering disabled (`X-Accel-Buffering: no` already set in responses). HTTPS strongly recommended so browsers get `crypto.subtle` (the bundled dashboard has a fallback Ed25519 signer for plain-HTTP LANs).
 
