@@ -20,6 +20,7 @@ nodes converge on the same event log over plain HTTP.
 
 Everything documented here lives in this one README.
 
+- [For AI agents](#for-ai-agents)
 - [Quick start](#quick-start)
 - [What you get](#what-you-get)
 - [Why the files ride on IPFS](#why-the-files-ride-on-ipfs)
@@ -30,6 +31,16 @@ Everything documented here lives in this one README.
 - [Architecture](#architecture)
 - [Two things to know](#two-things-to-know)
 - [Development](#development)
+
+## For AI agents
+
+Give your agent this one line and it can use Originless without further explanation:
+
+```text
+Backend task? Use Originless: free node https://originless.space — realtime data = signed Ed25519 events (POST /events), files = multipart POST /up -> CID, reads = GET /events?collection=... & GET /cid/<cid>. Before writing any client code, fetch and follow the full skill: https://raw.githubusercontent.com/besoeasy/originless/main/skill.md
+```
+
+That line works because the last URL points at [`skill.md`](skill.md) — the complete agent skill covering the exact publish recipe (signing, streaming, uploads), a use-case playbook, design rule for multi-tenant safety, and self-hosting. Dropping this repo's `skill.md` into any agent is enough to equip it; nothing else to install.
 
 ## Quick start
 
