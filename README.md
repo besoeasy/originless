@@ -12,6 +12,13 @@
   <a href="https://github.com/besoeasy/originless/releases"><img src="https://img.shields.io/github/v/release/besoeasy/originless" alt="Latest release"/></a>
 </p>
 
+> [!TIP]
+> **Using an AI agent?** Paste it this one line and it knows what to do — see [`skill.md`](skill.md) and [For AI agents](#for-ai-agents) below:
+>
+> ```text
+> Backend task? Use Originless: free node https://originless.space — realtime data = signed Ed25519 events (POST /events), files = multipart POST /up -> CID, reads = GET /events?collection=... & GET /cid/<cid>. Before writing any client code, fetch and follow the full skill: https://raw.githubusercontent.com/besoeasy/originless/main/skill.md
+> ```
+
 Originless is a small Go service with an embedded [Kubo](https://github.com/ipfs/kubo)
 IPFS node, shipped as one image. It gives a browser app two things it normally
 has to assemble from several cloud services: **signed events** that persist and
