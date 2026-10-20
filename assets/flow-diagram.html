@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Originless — person 1 uploads, person 2 fetches</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0a0a;
+    --panel:#101010;
+    --line:#1c1c1c;
+    --line-2:#242424;
+    --text:#ededed;
+    --muted:#8f8f8f;
+    --accent-p1:#6ea8fe;
+    --accent-p2:#c99bff;
+    --file:#f2c94c;
+    --ok:#4ade80;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:56px 32px}
+
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  h1{font-size:22px;font-weight:600;letter-spacing:-0.01em;margin-bottom:6px}
+  .sub{font-size:13.5px;color:var(--muted);max-width:640px;line-height:1.6}
+
+  .stage{margin-top:40px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:44px 36px;position:relative;overflow:hidden}
+  .stage::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:24px 24px;opacity:.45}
+
+  .flow{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .cell{width:200px;background:#141414;border:1px solid var(--line-2);border-radius:10px;padding:14px 16px;position:relative}
+  .cell h3{font-size:14px;font-weight:600;margin-bottom:2px}
+  .cell p{font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:6px}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted);border:1px solid var(--line-2);padding:2px 7px;border-radius:999px;text-transform:uppercase;letter-spacing:.08em}
+  .badge.p1{color:var(--accent-p1);border-color:rgba(110,168,254,.35)}
+  .badge.p2{color:var(--accent-p2);border-color:rgba(201,155,255,.35)}
+  .badge.file{color:var(--file);border-color:rgba(242,201,76,.4)}
+
+  .arrow{flex:1;position:relative;height:52px;display:flex;align-items:center;justify-content:center}
+  .arrow svg{width:100%;height:100%;position:absolute;inset:0}
+  .arrow span{position:relative;font-size:10.5px;color:var(--muted);background:var(--panel);padding:3px 9px;border:1px solid var(--line-2);border-radius:999px;white-space:nowrap;z-index:1}
+  .stroke-t{stroke:var(--text);stroke-width:1.2;fill:none}
+
+  .wrap .center{margin-top:0}
+  .pane{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .pane > div{background:rgba(10,10,10,.92);border:1px solid var(--line-2);border-radius:10px;padding:14px 18px;text-align:center}
+
+  .top{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .card{background:#0d0d0d;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card strong{font-size:12.5px;font-weight:600;display:block;margin-bottom:5px}
+  .card span{font-size:11.5px;color:var(--muted);line-height:1.6}
+  .cid{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text)}
+  .cid b{color:var(--file);font-weight:500}
+
+  .row{display:flex;gap:24px;margin-top:20px;position:relative;z-index:1}
+  .col{flex:1}
+  .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .label .dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+
+  .footer{margin-top:34px;display:flex;gap:14px;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
+  .footer .legend{display:inline-flex;align-items:center;gap:6px}
+  .footer .legend .dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+
+  @media (max-width:720px){
+    .flow{flex-direction:column;align-items:stretch}
+    .arrow{height:44px}
+    .row{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Originless</div>
+  <h1>Person 1 uploads the file. Person 2 gets it without asking Person 1 again.</h1>
+  <p class="sub">The name a file answers to is decided by its own bytes — the CID. That's why anyone who has it can serve it, anyone can verify it, and nobody has to "host" it.</p>
+
+  <div class="stage">
+    <div class="flow">
+      <div class="cell">
+        <span class="badge p1">Person 1</span>
+        <h3>Uploader</h3>
+        <p>Keeps their own copy. Serves the file when asked — but with nothing pinned their node is a temp landing spot, not an archive.</p>
+      </div>
+
+      <div class="arrow">
+        <svg viewBox="0 0 200 52" preserveAspectRatio="none">
+          <defs>
+            <marker id="m1" markerWidth="6" markerHeight="6" refX="4.5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ededed"/></marker>
+          </defs>
+          <path class="stroke-t" d="M0,26 L184,26" marker-end="url(#m1)"/>
+        </svg>
+        <span>POST /up — bytes → CID</span>
+      </div>
+
+      <div class="cell">
+        <span class="badge file">Landing zone</span>
+        <h3>Originless node</h3>
+        <p>Stores the blocks (unpinned). Uses DHT to announce <span class="cid" style="font-size:10.5px;color:var(--text)">CID</span>. GC may drop it — by design.</p>
+      </div>
+
+      <div class="arrow">
+        <svg viewBox="0 0 200 52" preserveAspectRatio="none">
+          <defs>
+            <marker id="m2" markerWidth="6" markerHeight="6" refX="4.5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#ededed"/></marker>
+          </defs>
+          <path class="stroke-t" d="M0,26 L184,26" marker-end="url(#m2)"/>
+        </svg>
+        <span>GET /cid — or any gateway</span>
+      </div>
+
+      <div class="cell">
+        <span class="badge p2">Person 2</span>
+        <h3>Fetcher</h3>
+        <p>Needs only the CID. No account, no token, no request to Person 1. Bytes verified against the hash on arrival.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <div class="label"><span class="dot" style="background:var(--accent-p1)"></span>Person 1 side</div>
+      <div class="card">
+        <strong>Nothing pinned</strong>
+        <span>Blocks are dropped when they stop being useful to *this* node. Content stays alive on the network as long as <em>someone</em> holds &amp; re-uploads it.</span>
+      </div>
+    </div>
+    <div class="col">
+      <div class="label"><span class="dot" style="background:var(--file)"></span>The file's only identity</div>
+      <div class="card">
+        <strong>CID = hash of the bytes</strong>
+        <span class="cid">Bafk<b>…</b>9d2c</span>
+        <span style="display:block;margin-top:6px">Same name on every node, verified on arrival. Change one bit, the CID changes.</span>
+      </div>
+    </div>
+    <div class="col">
+      <div class="label"><span class="dot" style="background:var(--accent-p2)"></span>Person 2 side</div>
+      <div class="card">
+        <strong>Verified, not trusted</strong>
+        <span>Fetch from Person 1's node, another node, or a public gateway — the bytes have to hash to the CID to be accepted.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="legend"><span class="dot" style="background:var(--accent-p1)"></span>uploader</span>
+    <span class="legend"><span class="dot" style="background:var(--file)"></span>the name</span>
+    <span class="legend"><span class="dot" style="background:var(--accent-p2)"></span>fetcher</span>
+    <span class="legend"><span class="dot" style="background:var(--line-2)"></span>Originless node (disposable)</span>
+  </div>
+</div>
+</body>
+</html>
