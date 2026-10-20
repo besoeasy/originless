@@ -25,11 +25,23 @@
 > curl -o skill.md https://raw.githubusercontent.com/besoeasy/originless/main/skill.md
 > ```
 
-Originless is a small Go service with an embedded [Kubo](https://github.com/ipfs/kubo)
-IPFS node, shipped as one image. It gives a browser app two things it normally
-has to assemble from several cloud services: **signed events** that persist and
-stream live, and **content-addressed uploads**. Set `SYNC_NODES` and separate
+Originless is a protocol, not an app, and the whole idea is one sentence:
+**run it on two computers, and anything you upload to one can be pulled
+through the other.** Everything else is packaging. A node is a small Go
+service with an embedded [Kubo](https://github.com/ipfs/kubo) IPFS node,
+shipped as one image; it gives a browser app signed events that persist and
+stream live, plus content-addressed uploads. Set `SYNC_NODES` and separate
 nodes converge on the same event log over plain HTTP.
+
+> [!IMPORTANT]
+> **Keep a copy of every file you want permanently shared.** Uploads are not
+> pinned — a node may garbage-collect its copy of anything nobody is actively
+> fetching, so "still shared" depends on someone else holding the bytes, and
+> you cannot rely on that. The fix is simple: keep the original safe, and
+> re-upload it when it goes stale. Re-uploading the same bytes is free — the
+> CID is the hash of the bytes, so it re-anchors the same name. Keep your
+> shareable files in one directory and let a script, or your client (which
+> will do it automatically), re-upload whatever drops out.
 
 Everything documented here lives in this one README.
 
@@ -1729,7 +1741,10 @@ reverse proxy when you need it. Full reasoning in
 [access control](#access-control).
 
 **Uploads are ephemeral.** Nothing is pinned, so Kubo's garbage collector may
-reclaim a CID. Keep your own copy of anything you need to survive that.
+reclaim a CID. Keep your own copy of anything you need to survive that, and
+re-upload it when it goes stale — the same bytes always re-anchor the same CID,
+so drops are repaired by a script or your client, not by begging hosts to
+"restore" a file. See [why the files ride on IPFS](#why-the-files-ride-on-ipfs).
 
 ## Development
 
