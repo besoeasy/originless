@@ -21,7 +21,7 @@ operations, and the architecture. The pitch and use cases live in the
 
 | | |
 | --- | --- |
-| **Signed events** | Immutable, Ed25519-verified JSON documents with TTL expiry, stored in SQLite, never served after expiry. An Ed25519 signature is the only credential in the protocol. |
+| **Signed events** | Immutable, Ed25519-verified JSON documents with TTL expiry, stored in SQLite, never served after expiry. An Ed25519 signature is the only credential in the protocol — I deliberately made it the only one. |
 | **Live updates** | Server-Sent Events, no WebSocket server. Reconnecting clients resume from their last event ID. |
 | **IPFS uploads** | Files and folders addressed by CID through the embedded Kubo node. Unpinned, so treat a CID as a reference. |
 | **Federation** | `SYNC_NODES` makes nodes converge on the union of their event sets, re-verifying every signature on the way in. |
@@ -29,53 +29,53 @@ operations, and the architecture. The pitch and use cases live in the
 
 ## Why the files ride on IPFS
 
-The event store and the live stream are what make Originless compact. The IPFS
-layer is what makes its content *self-verifying and host-independent*: uploads
-are not files parked behind this service's URL, they are content-addressed
-blocks whose name (the CID) is the hash of the bytes themselves.
+The event store and the live stream are what keep Originless compact. The IPFS
+layer is what makes content *self-verifying and host-independent* — uploads are
+not files parked behind my node's URL, they are content-addressed blocks whose
+name (the CID) is the hash of the bytes themselves.
 
-- **The name proves the bytes.** Whatever serves a block — this node, a public
-  gateway, a peer who pinned it — the client can verify it against the CID
+- **The name proves the bytes.** Whatever serves a block — my node, a public
+  gateway, a peer who kept it — the client can verify it against the CID
   before trusting it. There is no "believe the host" step, and a tampered copy
   cannot still answer to the same name.
 - **Content is not hostage to one host.** Any IPFS gateway can serve a CID
-  whose blocks live somewhere reachable, and this node is only one possible
-  home among them. Taking content down becomes a distributed chase across
-  holders and mirrors, not a request to one server.
+  whose blocks live somewhere reachable — my node is only one possible home
+  among them. Taking content down becomes a distributed chase across holders
+  and mirrors, not a request to one server.
 - **Readers can stay private.** A fetch needs the CID, not the origin: pull
   from any gateway — or straight off the swarm — without ever speaking to the
-  node that first held the upload. The origin's access log cannot profile its
-  readers if it is never in the read path.
+  node that first held the upload. My access log can't profile readers because
+  it's never in the read path.
 
-The trade, stated plainly: uploads are not pinned here, so this node's own copy
-is reclaimable by garbage collection, and "still out there" is
-availability-by-others, not a promise. Pin what must survive — see
+The trade, stated plainly: uploads are not pinned, so my node's copy is
+reclaimable by garbage collection, and "still out there" is availability by
+others, not a promise. Keep your copy of what must survive — see
 [sizing storage](#sizing-storage).
 
 ### GC is not the failure of this model — hosting is not its purpose
 
 Read the unpinned trade correctly: **a delete is not a delete.** Garbage
 collection reclaims this node's copy of blocks nobody has asked for recently.
-It cannot unshare anything whose blocks have already reached another
-holder — every other node, gateway or browser that fetched them *and kept them*
-now serves the same name. Compare a blob server: deleting a file there really
-deletes it, because there is exactly one copy.
+It cannot unshare anything whose blocks already reached another holder — every
+other node, gateway or browser that fetched them *and kept them* now serves the
+same name. Compare a blob server: deleting a file there really deletes it,
+because there is exactly one copy.
 
 And re-uploading is a **no-op, not a re-host**. The CID is the hash of the
 bytes, so uploading the same file twice produces the same CID — identical
 uploads cost nothing but re-indexing, and there is no "copy two" to keep in
-sync. That turns durability into a client-side loop, which is how Originless is
-meant to be used: keep your shareable files in one directory, and a script or
-app re-uploads whatever has fallen out of the network. The content that people
+sync. That turns durability into a client-side loop, which is exactly how I
+meant Originless to be used: keep your shareable files in one directory, and a
+script or app re-uploads whatever has fallen out of the network. Content people
 are actually fetching keeps getting refreshed by the swarm's traffic and your
-re-anchoring; the content nobody wants dies quietly.
+re-anchoring; content nobody wants dies quietly.
 
 That is also the point of the design. Originless is not file *hosting* — it is
 **anonymous file sharing**. There are no accounts, no upload auth, no access
 log tied to an identity, and a fetch never has to touch the node that first
 held the bytes. The server is an anonymous, disposable landing spot for
 content-addressed data; identity lives in keys, and persistence lives in the
-client-side re-upload loop.
+client-side re-upload loop — not in some promise I make and can't keep.
 
 ## Why Originless was created
 
@@ -97,19 +97,20 @@ Originless didn't replace the whole Nostr story, but it exists because a design 
 
 ## What this replaces
 
-[Why Originless was created](#why-originless-was-created) gave the reason; this
-section is the surface mapping. A Nostr stack runs three things at once —
-**relays** for events, **Blossom-style blob servers** for files, and the
-discovery, authentication and proxying glue between them. Originless stands in
-for all of them behind one container, and adds the property the stack never had:
-the servers talk to each other.
+[Why Originless was created](#why-originless-was-created) gave the reason; here
+is the surface mapping. A Nostr stack runs three things at once — **relays**
+for events, **Blossom-style blob servers** for files, and the discovery,
+authentication and proxying glue between them. Originless stands in for all of
+them behind one container, and adds the property the stack never had: the
+servers talk to each other.
 
-Relays do not replicate, so their problems are client problems: N independent
-sockets held open and written to, and a dead relay quietly taking its share of
-the log with it. Here nodes pull from each other over plain HTTP, re-verifying
-and converging on the union of their events — the fan-out stops being the
-client's problem, and a replaced node rebuilds from any surviving peer instead
-of taking history with it ([why it is more resilient](#why-it-is-more-resilient)).
+Relays do not replicate, so their problems become client problems: N
+independent sockets held open and written to, and a dead relay quietly taking
+its share of the log with it. Here nodes pull from each other over plain HTTP,
+re-verifying and converging on the union of their events — the fan-out stops
+being the client's problem, and a replaced node rebuilds from any surviving
+peer instead of taking history with it
+([why it is more resilient](#why-it-is-more-resilient)).
 
 | Role | Normally | Here |
 | --- | --- | --- |
@@ -1356,11 +1357,11 @@ If you change one of these, the corresponding test should change with it:
 
 ## Two things to know
 
-**There is no access control, by design.** No accounts, no passwords, no API
-tokens: an Ed25519 signature proves who wrote an event, not that they were
-allowed to. CORS is `*` because there is nothing to protect. Bind to
-`127.0.0.1` to keep a run private, and put authorization in your own client or a
-reverse proxy when you need it. Full reasoning in
+**There is no access control, and that is how I built it on purpose.** No
+accounts, no passwords, no API tokens: an Ed25519 signature proves who wrote an
+event, not that they were allowed to. CORS is `*` because there is nothing to
+protect. Bind to `127.0.0.1` for a private run, and put authorization in your
+own client or a reverse proxy. Full reasoning in
 [access control](#access-control).
 
 **Uploads are ephemeral.** Nothing is pinned, so Kubo's garbage collector may
@@ -1381,9 +1382,9 @@ go test ./...     # test
 ./podman.sh       # build the image and run it locally, foreground, --rm
 ```
 
-The app reads `PORT`, `STORAGE_MAX` and `SYNC_NODES`; when running outside the
-container it also expects `/data` to be writable, or point
-`config.EventsDBPath` elsewhere in code. See [architecture](#architecture).
+The app reads `PORT`, `STORAGE_MAX` and `SYNC_NODES`; outside the container it
+also wants `/data` writable, or point `config.EventsDBPath` elsewhere in code.
+See [architecture](#architecture).
 
 ## Links
 
