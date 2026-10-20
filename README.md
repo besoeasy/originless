@@ -394,17 +394,19 @@ Originless didn't replace the whole Nostr story, but it exists because a design 
 
 ## What this replaces
 
-Most real-time apps on the Nostr stack run three separate things: one or more
-**relays** for events, one or more **Blossom-style blob servers** for files, and
-the discovery, authentication and proxying that holds them together. Originless
-collapses all of it into one container behind one URL.
+[Why Originless was created](#why-originless-was-created) gave the reason; this
+section is the surface mapping. A Nostr stack runs three things at once —
+**relays** for events, **Blossom-style blob servers** for files, and the
+discovery, authentication and proxying glue between them. Originless stands in
+for all of them behind one container, and adds the property the stack never had:
+the servers talk to each other.
 
-That is not only a packaging difference. The relay model has a structural
-limitation — **relays do not talk to each other**, so a client holds N
-independent sockets and is responsible for writing to every one of them, and a
-relay that disappears takes its share of the log with it. Originless nodes *do*
-talk to each other, over plain HTTP, re-verifying and converging on the union of
-their events. The fan-out stops being the client's problem.
+Relays do not replicate, so their problems are client problems: N independent
+sockets held open and written to, and a dead relay quietly taking its share of
+the log with it. Here nodes pull from each other over plain HTTP, re-verifying
+and converging on the union of their events — the fan-out stops being the
+client's problem, and a replaced node rebuilds from any surviving peer instead
+of taking history with it ([why it is more resilient](#why-it-is-more-resilient)).
 
 | Role | Normally | Here |
 | --- | --- | --- |
