@@ -80,17 +80,18 @@ repo, so a working `go` install covers everything.
 docker run -d --name originless \
   -p 3232:3232 \
   -e STORAGE_MAX=20GB \
-  -v originless-data:/data \
   ghcr.io/besoeasy/originless:latest
 ```
 
 Open **<http://localhost:3232>** — the dashboard reports node health and repo
 size, and hosts a live chat and a shared canvas you can open in two browsers.
 
-The volume at `/data` holds both the event database and the IPFS repository.
-Without it the data lives in the container layer and disappears on
-`docker rm`. To keep the node private, bind to loopback instead of publishing
-it: `-p 127.0.0.1:3232:3232`.
+No volume, on purpose: everything is **ephemeral by design**. State lives in
+the container layer and dies with the container, and that is fine — peers
+rebuild the event log, and your files live in your own copies, not in the node.
+A replaced container is just a node that hasn't met anything yet. To keep the
+node private, bind to loopback instead of publishing it:
+`-p 127.0.0.1:3232:3232`.
 
 With Podman, `./podman.sh` builds the image from this checkout and runs it in the
 foreground with `--rm`.
@@ -277,7 +278,7 @@ of taking history with it ([why it is more resilient](#why-it-is-more-resilient)
 | Server discovery | NIP-65 `kind 10002` relay lists, a relay-finder entry point | one base URL |
 | Connection auth | NIP-42 challenge/response per connection | none — see [access control](#access-control) |
 | Replication | the client fans out; relays do not replicate | nodes pull from each other and converge |
-| Operations | N relays + blob servers + proxy + certs + relay payments | one container, one port, one volume |
+| Operations | N relays + blob servers + proxy + certs + relay payments | one container, one port, no infrastructure |
 
 ### Concept mapping
 
@@ -334,8 +335,8 @@ of taking history with it ([why it is more resilient](#why-it-is-more-resilient)
 - **Checkpoints survive restarts.** Per-peer progress lives in SQLite, so
   replacing a container resumes where it left off instead of re-ingesting
   history.
-- **Less to keep alive.** One process, one port, one volume. Nothing to
-  reconnect to, nothing to pay, nothing to reload in lockstep.
+- **Less to keep alive.** One process, one port, nothing to babysit.
+  Nothing to reconnect to, nothing to pay, nothing to reload in lockstep.
 
 **The exception is blobs.** Events replicate; uploads do not. Nothing is pinned,
 so garbage collection may drop the local copy — the blocks are advertised to the
@@ -386,7 +387,6 @@ A relay replacement is one container:
 ```bash
 docker run -d --name originless \
   -p 127.0.0.1:3232:3232 \
-  -v originless-data:/data \
   ghcr.io/besoeasy/originless:latest
 ```
 
@@ -905,8 +905,9 @@ curl \
 ```
 
 Uploads are added with `pin=false`, so nothing is pinned and Kubo's hourly GC at
-the 90% watermark may reclaim them. Mount a volume at `/data` and treat a CID as
-a reference, not a guarantee.
+the 90% watermark may reclaim them. Nothing here is a hosting promise — a CID
+is a reference, not a guarantee, and the copy you keep on your side is the
+durable one.
 
 ### `GET /cid/{cid}`
 
@@ -1054,7 +1055,6 @@ docker run -d --name originless \
   -p 3232:3232 \
   -e STORAGE_MAX=200GB \
   -e SYNC_NODES=https://node-a.example,https://node-b.example \
-  -v originless-data:/data \
   ghcr.io/besoeasy/originless:latest
 ```
 
@@ -1076,10 +1076,12 @@ originless: storage max=20GB, GC watermark=90%, period=1h
 └── ipfs/            Kubo repository: blocks, config, keys
 ```
 
-Mount a volume at `/data` to keep both across container replacement. Without
-one, `docker rm` deletes the event log *and* every uploaded CID, and those CIDs
-cannot be recovered from the public IPFS network because uploads are never
-pinned.
+Nothing here persists across container replacement, because state is ephemeral
+by design: `docker rm` deletes the event log *and* every uploaded CID, and
+those CIDs cannot be recovered from the public IPFS network — uploads are
+never pinned. A node rebuilds its event log from its peers on the next boot;
+files survive because *you* kept copies and re-anchor them. If you want a
+container that outlives itself instead, mount a volume at `/data`.
 
 The container runs as an unprivileged `originless` user and only exposes
 `3232/tcp`. Kubo's HTTP API and the libp2p swarm stay on loopback inside the
@@ -1116,7 +1118,7 @@ trust boundary.
 To keep a run private, bind to loopback and reach it over SSH:
 
 ```bash
-docker run -d --name originless -p 127.0.0.1:3232:3232 -v originless-data:/data ghcr.io/besoeasy/originless:latest
+docker run -d --name originless -p 127.0.0.1:3232:3232 ghcr.io/besoeasy/originless:latest
 ssh -L 3232:127.0.0.1:3232 you@your-server
 ```
 
@@ -1193,8 +1195,8 @@ own clients should not have to.
 
 ### Backup and restore
 
-Everything durable is under `/data`, so a backup is a copy of that directory
-with the container stopped:
+Persistence is opt-in: if you mounted a volume at `/data`, a backup is a copy of
+that directory with the container stopped:
 
 ```bash
 docker stop originless

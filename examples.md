@@ -438,18 +438,19 @@ fetched it, and re-uploading re-anchors it (last section).
 ## 8. Two computers, one file
 
 The protocol's core demo: two nodes, one file, and no shared server between
-them.
+them. No volumes anywhere — nodes are disposable; the event log re-converges
+from peers by design.
 
 ```bash
 # Computer A (or both containers on one machine)
 docker run -d --name o1 -p 127.0.0.1:3233:3232 \
   -e SYNC_NODES=http://localhost:3234 \
-  -v og1:/data ghcr.io/besoeasy/originless:latest
+  ghcr.io/besoeasy/originless:latest
 
 # Computer B — knows nothing until it pulls from A
 docker run -d --name o2 -p 127.0.0.1:3234:3232 \
   -e SYNC_NODES=http://localhost:3233 \
-  -v og2:/data ghcr.io/besoeasy/originless:latest
+  ghcr.io/besoeasy/originless:latest
 ```
 
 Publish an event on `o1` (any snippet above, `ORIGIN=http://localhost:3233`).

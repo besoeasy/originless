@@ -739,13 +739,13 @@
 
     <section id="persistence">
       <p class="eyebrow"><span class="marker">[*]</span> Persistence</p>
-      <h2 class="section-title reveal">State that survives restarts.</h2>
-      <p class="lede reveal">Everything important lives under <code>/data</code> in the container filesystem: a SQLite events database plus the embedded Kubo repository.</p>
+      <h2 class="section-title reveal">Ephemeral by design.</h2>
+      <p class="lede reveal">State lives under <code>/data</code> in the container filesystem — a SQLite events database plus the embedded Kubo repository — and it lives by the container's lifetime. A replaced container is a fresh node; it rebuilds its event log from its peers.</p>
       <div class="panel reveal">
         <pre style="overflow-x:auto; font-size:0.8rem;"><code>/data
 ├── events.db        # SQLite: signed events + sync checkpoints
 └── ipfs/            # Kubo repository (blocks, pins, config)</code></pre>
-        <p class="body-text" style="margin-top:1rem;">Mount a volume at <code>/data</code> to keep state across container replacement. Stored events are capped at a fifth of <code>STORAGE_MAX</code>; beyond that, the oldest live events are evicted. TTL-expired events are never served and are reaped hourly.</p>
+        <p class="body-text" style="margin-top:1rem;">Durability is a choice, not a default: mount a volume at <code>/data</code> only if you want the container to outlive itself — otherwise keep your own copies and let peers rebuild. Stored events are capped at a fifth of <code>STORAGE_MAX</code>; beyond that, the oldest live events are evicted. TTL-expired events are never served and are reaped hourly.</p>
       </div>
     </section>
 
