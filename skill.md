@@ -32,7 +32,7 @@ docker run -d --name originless -p 3232:3232 \
 
 ## Identity: one Ed25519 keypair per agent
 
-`owner` is the identity: `ed25519:<64 hex chars of the public key>`. Generate the keypair **once** per agent and persist it (seed file, localStorage, secrets manager). Losing the seed means losing that signer identity; reusing a seed protects the event history under your name.
+`owner` is the identity: `ed25519:<64 hex chars of the public key>`. Generate the keypair **once** per agent and persist it (seed file, localStorage, secrets manager). This seed **is** the account — there are no usernames, no resets, no recovery: losing it means losing that signer identity for good, keeping it means your whole event history stays under one name you can prove. Back the seed up before you publish anything.
 
 ## Publish recipe (do each step exactly)
 

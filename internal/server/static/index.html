@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Originless — a universal backend for building apps. Signed events and IPFS-native content in a single Docker container.">
-  <title>Originless | Universal App Backend &amp; Docker IPFS Node</title>
+  <title>Originless | The backend for everything</title>
   <style>
     :root {
       color-scheme: light;
@@ -591,7 +591,7 @@
     <section id="overview">
       <p class="eyebrow"><span class="marker">[*]</span> The open source universal app backend</p>
       <h1 class="hero-spell" aria-label="Originless"><span style="--i:0">O</span><span style="--i:1">r</span><span style="--i:2">i</span><span style="--i:3">g</span><span style="--i:4">i</span><span style="--i:5">n</span><span style="--i:6">l</span><span style="--i:7">e</span><span style="--i:8">s</span><span style="--i:9">s</span></h1>
-      <p class="lede">The universal backend for building apps. Collapse sprawling cloud microservices into two primitives — Signed Events and IPFS content. Build full-featured real-time apps in pure vanilla HTML and JavaScript with zero backend boilerplate.</p>
+      <p class="lede">The backend for everything. I collapsed the sprawling cloud stack into two primitives — signed events and IPFS content — so you can build full-featured real-time apps in pure vanilla HTML and JavaScript. No accounts, no backend boilerplate.</p>
 
       <div class="hero-cta">
         <a class="gh-star" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer" aria-label="Star besoeasy/originless on GitHub">
@@ -623,7 +623,7 @@
     <section id="primitives">
       <p class="eyebrow"><span class="marker">[*]</span> Primitives</p>
       <h2 class="section-title reveal">What is Originless?</h2>
-      <p class="lede reveal">Two universal primitives replace sprawling cloud microservices. No auth service, no database, no object store to operate.</p>
+      <p class="lede reveal">Two primitives that do the whole job. No auth service, no database, no object store to operate.</p>
       <div class="feature-list">
         <div class="feature reveal">
           <span class="marker">[*]</span>
@@ -652,7 +652,7 @@
     <section id="compare">
       <p class="eyebrow"><span class="marker">[*]</span> Why Originless?</p>
       <h2 class="section-title reveal">The Traditional SaaS Stack vs. The Originless Way.</h2>
-      <p class="lede reveal">Collapse sprawling cloud microservices into two universal primitives — Signed Events and IPFS content.</p>
+      <p class="lede reveal">This is the whole trick: signed events and IPFS content. I shaped the container so the rest of the stack becomes unnecessary, not paid-for.</p>
       <div class="grid-2">
         <div class="panel reveal" style="border-top:3px solid var(--color-danger);">
           <p class="panel-title title-bad">Fragile &amp; Expensive</p>
@@ -723,7 +723,7 @@
     <section id="federation">
       <p class="eyebrow"><span class="marker">[*]</span> Federation</p>
       <h2 class="section-title reveal">Two nodes, one event log.</h2>
-      <p class="lede reveal">Point two Originless containers at each other with <code>SYNC_NODES</code> and they converge on the same set of signed events — no broker, no extra infra.</p>
+      <p class="lede reveal">Point two Originless containers at each other with <code>SYNC_NODES</code> and they converge on the same set of signed events. I put the replication inside the nodes so you don't run a broker, or anything else.</p>
       <div class="panel reveal">
         <ul class="tick-list">
           <li><span class="verdict-good">✓</span><span><strong>Plain HTTP pull:</strong> every 5s each node fetches <code>GET /events?since=...</code> from its peers and imports what it lacks.</span></li>
@@ -818,8 +818,8 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
 
     <section id="usecases">
       <p class="eyebrow"><span class="marker">[*]</span> Possibilities</p>
-      <h2 class="section-title reveal">Possibility Is What You Can Imagine.</h2>
-      <p class="lede reveal">What can you build with Originless? Everything you can imagine, in a fraction of the time.</p>
+      <h2 class="section-title reveal">Build what you can imagine.</h2>
+      <p class="lede reveal">What can you build on two primitives? More than I listed below — this is only what I've watched people actually want.</p>
       <div class="cards-auto">
         <div class="mini-card reveal" style="border-top-color:var(--color-accent);">
           <span class="mini-emoji">🎨</span>
@@ -966,7 +966,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     <section id="api">
       <p class="eyebrow"><span class="marker">[*]</span> Reference</p>
       <h2 class="section-title reveal">One container, seven routes.</h2>
-      <p class="lede reveal">Everything is exposed on port 3232. No volumes, no databases, no sidecars.</p>
+      <p class="lede reveal">I expose everything on port 3232. No volumes, no databases, no sidecars.</p>
 
       <div class="panel reveal">
         <table class="api-table" style="margin-top:0;">
@@ -1029,8 +1029,8 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     <section id="closing" style="margin-bottom:0;">
       <div class="panel reveal" style="text-align:center; padding:3rem 2rem;">
         <p class="eyebrow" style="display:flex; justify-content:center;"><span class="marker">[*]</span>&nbsp;Zero-auth backend</p>
-        <h2 class="section-title">The Universal Zero-Auth Backend for Modern Apps.</h2>
-        <p class="lede" style="margin-left:auto; margin-right:auto; text-align:center;">No accounts. No API keys. No database migrations. Signed events, IPFS content-addressing, native real-time streams, and node-to-node replication in a single container.</p>
+        <h2 class="section-title">The backend for everything, with zero auth.</h2>
+        <p class="lede" style="margin-left:auto; margin-right:auto; text-align:center;">No accounts. No API keys. No database migrations. Signed events, IPFS content-addressing, native real-time streams, and node-to-node replication — in a single container I built so the usual stack stops being necessary.</p>
         <div class="hero-cta" style="margin-bottom:0;">
           <a class="gh-star" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer" aria-label="Star besoeasy/originless on GitHub">
             <span class="gh-star-main">
@@ -1050,7 +1050,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     <div class="footer-inner">
       <div>
         <p><strong>Originless</strong></p>
-        <p style="margin-top:0.5rem;">The open source universal app backend.<br>Signed events and IPFS-native content in one container.</p>
+        <p style="margin-top:0.5rem;">One person's answer to the sprawl: signed events and IPFS-native content in one container.<br>The spec is open — <a href="https://github.com/besoeasy/originless/blob/main/skill.md">agents, start here</a>.</p>
       </div>
       <nav aria-label="Resources">
         <strong>Resources</strong>
@@ -1065,7 +1065,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
         <a href="#api">API reference</a>
       </nav>
     </div>
-    <p class="footer-bottom">© 2026 Originless · Events persist in-container on SQLite; nothing leaves the box unless you publish it.</p>
+    <p class="footer-bottom">© 2026 Originless · Ephemeral by design: events live in-container on SQLite; nothing leaves the box unless you publish it.</p>
   </footer>
 
   <div id="toast-container" class="toast-container"></div>
