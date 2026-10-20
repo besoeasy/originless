@@ -756,7 +756,7 @@
         <pre style="overflow-x:auto; font-size:0.8rem;"><code># 1. Upload a file, get back a CID
 curl -F "file=@hello.txt" http://localhost:3232/up
 
-# 2. Publish a signed event (signing recipe in the README)
+# 2. Publish a signed event (signing recipe in the README / examples.md)
 curl -X POST http://localhost:3232/events \
   -H "Content-Type: application/json" \
   -d '{"owner":"ed25519:...","collection":"chat","created_at":...,"expires_at":...,"data":{...},"labels":[],"sig":"..."}'

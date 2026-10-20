@@ -1,7 +1,7 @@
 // Command example-event prints a fully reproducible, signed Originless event.
 //
 // The keypair comes from a fixed seed, so pinning created_at reproduces the
-// worked example in the README exactly:
+// worked example in examples.md exactly:
 //
 //	go run ./scripts/example-event.go -now 1758420000
 //
@@ -35,8 +35,8 @@ const (
 	collection = "notes"
 	label      = "notes:lobby"
 	ttlSecs    = 30 * 24 * 60 * 60
-	document   = "1758420000" // created_at used by the worked example in the README
-	documentTo = "1761012000" // expires_at used by the worked example in the README
+	document   = "1758420000" // created_at used by the worked example in examples.md
+	documentTo = "1761012000" // expires_at used by the worked example in examples.md
 )
 
 var (

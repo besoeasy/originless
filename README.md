@@ -55,6 +55,7 @@ Everything documented here lives in this one README.
 - [Configuration and operations](#configuration-and-operations)
 - [Architecture](#architecture)
 - [Two things to know](#two-things-to-know)
+- [Examples](examples.md)
 - [Development](#development)
 
 ## For AI agents
@@ -70,8 +71,8 @@ That line works because the last URL points at [`skill.md`](skill.md) — the co
 ## Quick start
 
 Five minutes from nothing to a signed event on the wire. Assumes `curl` and
-either Docker or Podman; the publishing client is plain Go with no
-dependencies.
+either Docker or Podman; publishing goes through the generator script in the
+repo, so a working `go` install covers everything.
 
 ### 1. Start a node
 
@@ -97,181 +98,14 @@ foreground with `--rm`.
 ### 2. Publish a signed event
 
 Originless has no accounts. An event carries an Ed25519 public key in `owner`,
-and the client signs a digest of the event with the matching private key. Save
-this as `publish.go`:
-
-```go
-package main
-
-import (
-	"bytes"
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"sort"
-	"strconv"
-	"time"
-)
-
-const (
-	collection = "demo/notes"
-	label      = "notes:lobby"
-	keyFile    = "originless.key"
-)
-
-func main() {
-	note := "hello from Go"
-	if len(os.Args) > 1 {
-		note = os.Args[1]
-	}
-	base := os.Getenv("ORIGIN")
-	if base == "" {
-		base = "http://localhost:3232"
-	}
-
-	// Identity is a keypair on this device. Originless keeps no account state:
-	// reuse the same key file and you keep the same signer across restarts.
-	key, err := loadOrCreateKey(keyFile)
-	if err != nil {
-		fail("key: %v", err)
-	}
-	owner := "ed25519:" + hex.EncodeToString(key.Public().(ed25519.PublicKey))
-
-	created := time.Now().Truncate(time.Second).Unix()
-	expires := created + int64(30*24*60*60) // 30 day TTL, well under the 1 year cap
-
-	// data must be a JSON object. Its canonical form is what gets signed.
-	data, err := json.Marshal(map[string]any{"note": note, "at": created})
-	if err != nil {
-		fail("data: %v", err)
-	}
-	canonical := canonicalJSON(data)
-
-	message := owner + ":" + collection + ":" +
-		strconv.FormatInt(created, 10) + ":" + strconv.FormatInt(expires, 10) + ":" +
-		string(canonical) + "::" + label
-	digest := sha256.Sum256([]byte(message))
-
-	// The signature covers the 32-byte digest, not the message text.
-	sig := ed25519.Sign(key, digest[:])
-
-	body, err := json.Marshal(map[string]any{
-		"owner":      owner,
-		"collection": collection,
-		"created_at": created,
-		"expires_at": expires,
-		"data":       json.RawMessage(canonical),
-		"labels":     []string{label},
-		"sig":        hex.EncodeToString(sig),
-	})
-	if err != nil {
-		fail("event: %v", err)
-	}
-
-	response, err := http.Post(base+"/events", "application/json", bytes.NewReader(body))
-	if err != nil {
-		fail("post: %v", err)
-	}
-	defer response.Body.Close()
-	reply, _ := io.ReadAll(response.Body)
-	fmt.Printf("%s\n%s\n", response.Status, reply)
-	if response.StatusCode != http.StatusCreated && response.StatusCode != http.StatusOK {
-		os.Exit(1)
-	}
-}
-
-// loadOrCreateKey returns the Ed25519 seed stored at path, generating one on
-// first use. The file holds the 32-byte seed and nothing else.
-func loadOrCreateKey(path string) (ed25519.PrivateKey, error) {
-	seed, err := os.ReadFile(path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-		if seed, err = makeSeed(); err != nil {
-			return nil, err
-		}
-		if err := os.WriteFile(path, seed, 0o600); err != nil {
-			return nil, err
-		}
-	}
-	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("%s is not a %d-byte seed", path, ed25519.SeedSize)
-	}
-	return ed25519.NewKeyFromSeed(seed), nil
-}
-
-func makeSeed() ([]byte, error) {
-	seed := make([]byte, ed25519.SeedSize)
-	_, err := rand.Read(seed)
-	return seed, err
-}
-
-// canonicalJSON renders compact JSON with recursively sorted object keys and
-// numbers preserved as written, matching what the server derives before it
-// verifies a signature.
-func canonicalJSON(raw []byte) []byte {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		panic(err)
-	}
-	return marshalCanonical(value)
-}
-
-func marshalCanonical(value any) []byte {
-	switch typed := value.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(typed))
-		for key := range typed {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		var out bytes.Buffer
-		out.WriteByte('{')
-		for index, key := range keys {
-			if index > 0 {
-				out.WriteByte(',')
-			}
-			encoded, _ := json.Marshal(key)
-			out.Write(encoded)
-			out.WriteByte(':')
-			out.Write(marshalCanonical(typed[key]))
-		}
-		out.WriteByte('}')
-		return out.Bytes()
-	case []any:
-		var out bytes.Buffer
-		out.WriteByte('[')
-		for index, item := range typed {
-			if index > 0 {
-				out.WriteByte(',')
-			}
-			out.Write(marshalCanonical(item))
-		}
-		out.WriteByte(']')
-		return out.Bytes()
-	default:
-		encoded, _ := json.Marshal(typed)
-		return encoded
-	}
-}
-
-func fail(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	os.Exit(1)
-}
-```
+and the client signs a digest of the event with the matching private key. The
+repository ships a generator that does the whole recipe and posts for you:
 
 ```bash
-go mod init publish && go run publish.go "hello from Go"
+go run ./scripts/example-event.go -body /tmp/event.json
+curl -X POST http://127.0.0.1:3232/events \
+  -H 'Content-Type: application/json' \
+  --data @/tmp/event.json
 ```
 
 ```text
@@ -283,19 +117,9 @@ Run it twice: the second time the same bytes are already known, so the node
 answers `200` with `"duplicate": true`. The `id` is derived from the signed
 content, not assigned randomly.
 
-To see the exact signing recipe — or to post an event without writing any Go —
-use the generator in this repository:
-
-```bash
-go run ./scripts/example-event.go -body /tmp/event.json
-curl -X POST http://127.0.0.1:3232/events \
-  -H 'Content-Type: application/json' \
-  --data @/tmp/event.json
-```
-
-It prints the signing message, its SHA-256 digest, the event ID and the
-signature. Add `-documented` for the fixed, reproducible values used in the
-[worked example](#worked-example).
+Full zero-dependency client code — this exact recipe as a Go `publish.go` and
+as a Node script — lives in [`examples.md`](examples.md), next to the
+byte-for-byte [worked example](examples.md#4-worked-example-byte-for-byte).
 
 ### 3. Watch events arrive
 
@@ -725,55 +549,10 @@ canonicalize recursively before signing.
 
 ### Worked example
 
-Reproducible from the fixed seed
-`0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20`. The
-repository ships the generator:
-
-```bash
-go run ./scripts/example-event.go -documented
-```
-
-```text
-owner:       ed25519:79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664
-collection:  notes
-created_at:  1758420000
-expires_at:  1761012000
-data:        {"author":"ada","note":"keys are the identity","rank":7}
-labels:      [notes:lobby]
-```
-
-Signing message (one line):
-
-```text
-ed25519:79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664:notes:1758420000:1761012000:{"author":"ada","note":"keys are the identity","rank":7}::notes:lobby
-```
-
-Digest and event ID are the same bytes, hex-encoded:
-
-```text
-6191ca75c643a54bd9afd9d64bf6b6c3a14bed74c899748cd4670d164e751f47
-```
-
-Signature of that digest:
-
-```text
-abbeb588751339d096924dc891cf49c20ebec47841cb544fae9ad67e042c081e5cbba6a3a414e89431bd4c2997f8b2e457174a90497e9abb8f78202897725d05
-```
-
-The timestamps above are deliberately in the past so the values stay fixed, and
-a node will refuse that event as already expired. To get a body you can actually
-publish, let the tool stamp current times and write the request body out:
-
-```bash
-go run ./scripts/example-event.go -body /tmp/event.json
-curl -X POST http://127.0.0.1:3232/events \
-  -H 'Content-Type: application/json' \
-  --data @/tmp/event.json
-```
-
-```json
-{"id":"738d33f0…","status":"success","stored_at":"2026-10-15T21:10:02Z"}
-```
+The byte-for-byte signing walkthrough — the fixed seed, signing message, digest
+and signature you can check against any language — lives in
+[examples.md](examples.md#4-worked-example-byte-for-byte). Generate the same
+documented values with `go run ./scripts/example-event.go -documented`.
 
 ### Validation rules
 
@@ -1475,7 +1254,7 @@ internal/sync          peer pull loop over the public /events endpoints
 internal/ipfs          minimal Kubo HTTP API client
 internal/server        router, CORS, embedded dashboard, stats/upload/cid/health handlers
 internal/testutil      test helpers: signs events with the same recipe as a client
-scripts/example-event.go   reproducible signed event used by the worked example here
+scripts/example-event.go   reproducible signed event used by the worked example in examples.md
 ```
 
 The dependency direction is one-way: `server` and `sync` both call into
