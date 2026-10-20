@@ -81,6 +81,31 @@ is reclaimable by garbage collection, and "still out there" is
 availability-by-others, not a promise. Pin what must survive — see
 [configuration → sizing storage](docs/configuration.md#sizing-storage).
 
+### GC is not the failure of this model — hosting is not its purpose
+
+Read the unpinned trade correctly: **a delete is not a delete.** Garbage
+collection reclaims this node's copy of blocks nobody has asked for recently.
+It cannot unshare anything whose blocks have already reached another
+holder — every other node, gateway or browser that fetched them *and kept them*
+now serves the same name. Compare a blob server: deleting a file there really
+deletes it, because there is exactly one copy.
+
+And re-uploading is a **no-op, not a re-host**. The CID is the hash of the
+bytes, so uploading the same file twice produces the same CID — identical
+uploads cost nothing but re-indexing, and there is no "copy two" to keep in
+sync. That turns durability into a client-side loop, which is how Originless is
+meant to be used: keep your shareable files in one directory, and a script or
+app re-uploads whatever has fallen out of the network. The content that people
+are actually fetching keeps getting refreshed by the swarm's traffic and your
+re-anchoring; the content nobody wants dies quietly.
+
+That is also the point of the design. Originless is not file *hosting* — it is
+**anonymous file sharing**. There are no accounts, no upload auth, no access
+log tied to an identity, and a fetch never has to touch the node that first
+held the bytes. The server is an anonymous, disposable landing spot for
+content-addressed data; identity lives in keys, and persistence lives in the
+client-side re-upload loop.
+
 ## What this replaces
 
 Originless stands in for three services that are normally deployed separately:
