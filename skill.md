@@ -208,4 +208,4 @@ docker run -d --name originless -p 3232:3232 -v originless-data:/data \
 - Health/metrics: `/healthz` (app+node), `/stats`.
 - When orchestrating reverse proxies: `/events/stream` needs buffering disabled (`X-Accel-Buffering: no` already set in responses). HTTPS strongly recommended so browsers get `crypto.subtle` (the bundled dashboard has a fallback Ed25519 signer for plain-HTTP LANs).
 
-Pointer: everything else in this repo covers deeper ground — the full HTTP API table, worked signing example (`scripts/example-event.go`), architecture notes. Start with the README's "HTTP API reference" and "The event protocol" sections rather than guessing.
+Pointer: the [README](https://raw.githubusercontent.com/besoeasy/originless/main/README.md) covers deeper ground — the full HTTP API table, worked signing example (`scripts/example-event.go` via raw URL `https://raw.githubusercontent.com/besoeasy/originless/main/scripts/example-event.go`), architecture notes. Read its "HTTP API reference" and "The event protocol" sections rather than guessing.

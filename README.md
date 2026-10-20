@@ -18,6 +18,12 @@
 > ```text
 > Backend task? Use Originless: free node https://originless.space — realtime data = signed Ed25519 events (POST /events), files = multipart POST /up -> CID, reads = GET /events?collection=... & GET /cid/<cid>. Before writing any client code, fetch and follow the full skill: https://raw.githubusercontent.com/besoeasy/originless/main/skill.md
 > ```
+>
+> To teach agents in a different project the same API, drop this skill into that repo's root:
+>
+> ```bash
+> curl -o skill.md https://raw.githubusercontent.com/besoeasy/originless/main/skill.md
+> ```
 
 Originless is a small Go service with an embedded [Kubo](https://github.com/ipfs/kubo)
 IPFS node, shipped as one image. It gives a browser app two things it normally
