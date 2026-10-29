@@ -23,9 +23,8 @@ Environment variables:
 
 The port is published on every interface so other devices on your network can
 open the shared canvas and chat; the LAN address is printed on start. Originless
-has no accounts and no API token: an Ed25519 signature on an event is the only
-credential, and it proves who wrote an event rather than granting permission. Run
-this only on a network you trust, and use HOST=127.0.0.1 to keep it private.
+has no accounts and no API tokens. Run this only on a network you trust, and
+use HOST=127.0.0.1 to keep it private.
 
 Examples:
   ./podman.sh
@@ -98,7 +97,7 @@ echo "==> press Ctrl-C to stop and remove the container"
 # -e NAME without a value copies from the host environment and leaves the
 # image default in place when the host does not define it.
 pass_env=()
-for var in STORAGE_MAX SYNC_NODES; do
+for var in STORAGE_MAX; do
 	if [[ -n "${!var:-}" ]]; then
 		pass_env+=(-e "$var")
 	fi

@@ -11,8 +11,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-
-	"github.com/besoeasy/originless/internal/events"
 )
 
 // Defaults for the environment-driven settings.
@@ -24,29 +22,15 @@ const (
 // spool directory are fixed: the app always runs beside its Kubo daemon.
 type Config struct {
 	// StorageMax is the human-readable limit applied to the Kubo
-	// repository, shared with the entrypoint. Parsed into
-	// MaxEventBytes for the event store by FromEnv and Default.
+	// repository, shared with the entrypoint.
 	StorageMax string
-	// MaxEventBytes bounds the total size of stored events. It is
-	// StorageMax/5: events may use at most a fifth of the store's
-	// storage budget. Zero means unbounded (used by tests).
-	MaxEventBytes int64
-	// EventsDBPath is where signed events are persisted in SQLite. It always
-	// has a working value; there is no memory-only mode.
-	EventsDBPath string
-	// SyncNodes are base URLs of peer Originless nodes to federate with
-	// (bidirectional pull sync over HTTP).
-	SyncNodes []string
 }
 
 // Default returns the configuration used when nothing is set in the
 // environment.
 func Default() Config {
-	maxEventBytes, _ := storageMaxBytes(DefaultStorageMax)
 	return Config{
-		StorageMax:    DefaultStorageMax,
-		MaxEventBytes: maxEventBytes / 5,
-		EventsDBPath:  events.DefaultDBPath,
+		StorageMax: DefaultStorageMax,
 	}
 }
 
@@ -92,23 +76,8 @@ func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 
 	if value, ok := getenv("STORAGE_MAX"); ok && strings.TrimSpace(value) != "" {
 		cfg.StorageMax = strings.TrimSpace(value)
-		parsed, err := storageMaxBytes(cfg.StorageMax)
-		if err != nil {
+		if _, err := storageMaxBytes(cfg.StorageMax); err != nil {
 			return Config{}, fmt.Errorf("invalid STORAGE_MAX %q: %w", value, err)
-		}
-		cfg.MaxEventBytes = parsed / 5
-	}
-
-	if value, ok := getenv("SYNC_NODES"); ok && strings.TrimSpace(value) != "" {
-		for _, node := range strings.Split(value, ",") {
-			node = strings.TrimSpace(node)
-			if node == "" {
-				continue
-			}
-			if !strings.HasPrefix(node, "http://") && !strings.HasPrefix(node, "https://") {
-				return Config{}, fmt.Errorf("invalid SYNC_NODES entry %q: must start with http:// or https://", node)
-			}
-			cfg.SyncNodes = append(cfg.SyncNodes, node)
 		}
 	}
 
@@ -117,5 +86,5 @@ func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 
 // Describe renders the settings, for the startup log line.
 func (c Config) Describe() string {
-	return fmt.Sprintf("storage_max=%q event_bytes_budget=%d events_db=%q sync_nodes=%d", c.StorageMax, c.MaxEventBytes, c.EventsDBPath, len(c.SyncNodes))
+	return fmt.Sprintf("storage_max=%q", c.StorageMax)
 }

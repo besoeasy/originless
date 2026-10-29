@@ -7,11 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/ipfs"
-	"github.com/besoeasy/originless/internal/testutil"
 )
 
 func TestHomePageIsEmbeddedAndDoesNotRequireIPFS(t *testing.T) {
@@ -69,41 +67,6 @@ func TestStatsJSON(t *testing.T) {
 	}
 	if response.NumObjects != 7 || response.SizeStat.RepoSize != 1024 {
 		t.Errorf("stats = %+v, want expected statistics", response)
-	}
-	if response.Events.Total != 0 || response.Events.Count != 0 || response.Events.UniqueOwners != 0 {
-		t.Errorf("event stats = %+v, want empty event stats", response.Events)
-	}
-}
-
-func TestStatsIncludesEventStats(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"NumObjects":1,"RepoPath":"/repo","SizeStat":{"RepoSize":10,"StorageMax":100},"Version":"fs-repo@18"}`))
-	}))
-	defer server.Close()
-
-	client, err := ipfs.NewClient(server.URL)
-	if err != nil {
-		t.Fatalf("NewClient() error = %v", err)
-	}
-	router := mustNewRouter(t, client)
-	now := time.Now().Truncate(time.Second)
-	raw, _ := testutil.MakeSignedEvent(t, now.Unix(), now.Unix()+3600, "chat", map[string]any{"message": "hello"}, []string{"room:lobby"}, "")
-	testutil.PublishTestEvent(t, router, raw)
-
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/stats", nil))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
-	}
-	var response statsResponse
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if response.Events.Count != 1 || response.Events.Total != 1 || response.Events.UniqueOwners != 1 {
-		t.Errorf("event counts = %+v, want one active event and owner", response.Events)
-	}
-	if len(response.Events.TopCollections) != 1 || response.Events.TopCollections[0].Collection != "chat" || response.Events.TopCollections[0].Count != 1 {
-		t.Errorf("top collections = %+v, want chat:1", response.Events.TopCollections)
 	}
 }
 
@@ -222,38 +185,6 @@ func TestCORSMiddleware(t *testing.T) {
 		if got := recorder.Header().Get("Access-Control-Allow-Headers"); got != "*" {
 			t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, "*")
 		}
-	}
-}
-
-func TestEventsSurviveRouterRestart(t *testing.T) {
-	dbPath := t.TempDir() + "/events.db"
-	now := time.Now().Truncate(time.Second)
-	raw, _ := testutil.MakeSignedEvent(t, now.Unix()-5, now.Unix()+3600, "chat", map[string]any{"message": "persisted"}, []string{}, "")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cfg := config.Default()
-	cfg.EventsDBPath = dbPath
-	router := mustRouter(t, ctx, nil, cfg)
-	resp := testutil.PublishTestEvent(t, router, raw)
-	if resp.Code != http.StatusCreated {
-		t.Fatalf("publish status = %d, want %d", resp.Code, http.StatusCreated)
-	}
-	var created struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil || created.ID == "" {
-		t.Fatalf("decode publish response: %v", err)
-	}
-	cancel()
-
-	// A new router over the same database file simulates a process restart.
-	router2 := mustRouter(t, context.Background(), nil, cfg)
-	recorder := httptest.NewRecorder()
-	recorder.Body.Reset()
-	req := httptest.NewRequest(http.MethodGet, "/events/"+created.ID, nil)
-	router2.ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("get after restart status = %d, want %d", recorder.Code, http.StatusOK)
 	}
 }
 

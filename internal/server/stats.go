@@ -4,22 +4,16 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"time"
 
-	"github.com/besoeasy/originless/internal/events"
 	"github.com/besoeasy/originless/internal/ipfs"
 )
 
 type statsResponse struct {
 	ipfs.IPFSStats
-	Events events.EventStats `json:"events"`
-	// Evicted counts events dropped because the event byte budget was hit.
-	Evicted int `json:"events_evicted"`
 }
 
 type statsHandler struct {
 	client *ipfs.Client
-	events *events.Store
 }
 
 func (h *statsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -44,15 +38,7 @@ func (h *statsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	eventStats := events.EventStats{}
-	evicted := 0
-	if h.events != nil {
-		eventStats = h.events.Stats(time.Now())
-		evicted = h.events.Evicted()
-	}
 	writeJSON(w, http.StatusOK, statsResponse{
 		IPFSStats: stats,
-		Events:    eventStats,
-		Evicted:   evicted,
 	})
 }

@@ -29,7 +29,7 @@ cleanup() {
 }
 
 # Forward container stop signals to both children so the Go app runs its
-# graceful shutdown (cancel ctx, close the event DB, drain HTTP handlers).
+# graceful shutdown (cancel ctx, drain HTTP handlers).
 on_signal() {
 	if [ -n "$app_pid" ]; then
 		kill -TERM "$app_pid" 2>/dev/null || true

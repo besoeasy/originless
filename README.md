@@ -1,8 +1,8 @@
 # Originless
 
 <p align="center">
-  <strong>A single-container backend for real-time web apps.</strong><br/>
-  Signed, persistent events with live updates, content-addressed file uploads, and optional multi-node federation — no database server, message broker, or account system to run.
+  <strong>A single-container backend for content-addressed file storage.</strong><br/>
+  Content-addressed file uploads over IPFS — no database server or account system to run.
 </p>
 
 <p align="center">
@@ -14,11 +14,8 @@
 
 Originless is a small Go HTTP service with an embedded [Kubo](https://github.com/ipfs/kubo) IPFS node, packaged in one image. You get a self-hosted backend you can start with a single command:
 
-- **Signed events** — immutable, Ed25519-verified JSON documents with TTL expiry, persisted in SQLite and never served after expiry
-- **Live updates** — Server-Sent Events, no WebSocket server required; reconnecting clients resume from their last event ID
 - **IPFS uploads** — files and folders addressed by CID, no pinning by default
-- **Federation** — set `SYNC_NODES` and nodes converge on the same event set over plain HTTP
-- **Built-in demos** — a shared canvas, chat, event stream, and upload dashboard
+- **Built-in dashboard** — upload files and folders and inspect CIDs
 - **CORS enabled** — browser apps can call the API from any origin
 
 ## Quick start
@@ -37,7 +34,7 @@ docker stop originless      # stop (data preserved in the container layer)
 docker rm originless        # remove (deletes all data)
 ```
 
-To keep the IPFS repository and event database across container replacement, mount a volume at `/data`:
+To keep the IPFS repository across container replacement, mount a volume at `/data`:
 
 ```bash
 docker run -d --name originless -p 3232:3232 -v originless-data:/data ghcr.io/besoeasy/originless:latest
@@ -47,31 +44,14 @@ docker run -d --name originless -p 3232:3232 -v originless-data:/data ghcr.io/be
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `STORAGE_MAX` | `20GB` | Human-readable soft limit for the Kubo repository. Stored events are capped at a fifth of this value; beyond that the oldest live events are evicted. |
+| `STORAGE_MAX` | `20GB` | Human-readable soft limit for the Kubo repository. |
 | `PORT` | `3232` | HTTP port inside the container. |
-| `SYNC_NODES` | *none* | Comma-separated base URLs of peer Originless nodes to federate with. |
 
 Automatic garbage collection runs hourly at a fixed **90%** watermark. Because uploads are unpinned, a CID may become unavailable after garbage collection.
 
-## Federation
-
-Set `SYNC_NODES` on each node to the other's base URL and the two exchange events over plain HTTP every 5 seconds:
-
-```bash
-docker run -d --name o1 -p 127.0.0.1:3233:3232 -e SYNC_NODES=http://localhost:3234 ghcr.io/besoeasy/originless:latest
-docker run -d --name o2 -p 127.0.0.1:3234:3232 -e SYNC_NODES=http://localhost:3233 ghcr.io/besoeasy/originless:latest
-```
-
-Each node pulls `GET /events?since=...` from its peers, re-verifies every signature, and dedupes by event ID, so they converge on the union of both event sets. Only **events** are synced — IPFS blobs stay on the node that accepted them, and each node keeps its own `/data/events.db`.
-
-> [!NOTE]
-> Sync checkpoints on `created_at`, so client clocks should be roughly in step and `created_at` should be "now" — events backdated beyond the 15-minute drift window are not guaranteed to sync. Checkpoints are persisted, so a node resumes where it left off after a restart.
-
-Like every other part of Originless there is no authentication — expose the API only on networks you trust.
-
 ## Access control
 
-There is none, by design. No user accounts, no passwords, no API tokens: an Ed25519 signature on an event is the only credential in the protocol, and it proves **authorship** — who wrote an event — not **permission** to write it. Any client that can reach the port can publish to any collection, and CORS is `*` because there are no credentials for a browser to withhold.
+There is none, by design. No user accounts, no passwords, no API tokens. Any client that can reach the port can upload content, and CORS is `*` because there are no credentials for a browser to withhold.
 
 That makes the network boundary the trust boundary. To keep a run private, bind to localhost:
 
@@ -104,34 +84,12 @@ The complete request and response reference is in [`docs/api.md`](docs/api.md).
 | --- | --- | --- |
 | `GET` | `/` | Dashboard and live demos |
 | `GET` | `/healthz` | Container health |
-| `GET` | `/stats` | IPFS and event metrics |
+| `GET` | `/stats` | IPFS metrics |
 | `POST` | `/up` | Upload a file or folder |
 | `POST` | `/upf` | Explicit folder upload |
 | `GET` | `/cid/{cid}` | JSON metadata and availability for a CID |
-| `POST` | `/events` | Publish a signed event |
-| `GET` | `/events` | Query events with filters and pagination |
-| `GET` | `/events/{id}` | Retrieve one event |
-| `GET` | `/events/stream` | Stream events over SSE |
 
-Events are stored in SQLite at `/data/events.db` and survive restarts. Uploaded content is ephemeral by default — mount a volume at `/data` to keep it, and remember unpinned CIDs can be garbage-collected.
-
-### Signed events
-
-An event is a small JSON document signed by its creator. The signature is verified with the Ed25519 public key in `owner`; the server manages no accounts or passwords.
-
-```json
-{
-  "owner": "ed25519:<64-hex-public-key>",
-  "collection": "originless/chat",
-  "created_at": 1758420000,
-  "expires_at": 1789956000,
-  "data": {"message": "Hello from the browser"},
-  "labels": ["chat:lobby"],
-  "sig": "<128-hex-signature>"
-}
-```
-
-Use `/events/stream` to receive matching events live. Event documents are limited to 8 KiB and one year of TTL.
+Uploaded content is ephemeral by default — mount a volume at `/data` to keep it, and remember unpinned CIDs can be garbage-collected.
 
 ## Development
 

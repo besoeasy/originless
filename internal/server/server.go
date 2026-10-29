@@ -7,15 +7,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/besoeasy/originless/internal/config"
-	"github.com/besoeasy/originless/internal/events"
 	"github.com/besoeasy/originless/internal/ipfs"
-	"github.com/besoeasy/originless/internal/sync"
 )
 
 const requestTimeout = 5 * time.Second
@@ -70,48 +65,20 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 // NewRouter builds a router with the default configuration. It is convenient
-// for tests and for callers that do not need to tune anything. The event
-// database goes to a unique temporary file so tests never collide.
+// for tests and for callers that do not need to tune anything.
 func NewRouter(client *ipfs.Client) (http.Handler, error) {
-	dir, err := os.MkdirTemp("", "originless-events-")
-	if err != nil {
-		return nil, err
-	}
 	cfg := config.Default()
-	cfg.EventsDBPath = filepath.Join(dir, "events.db")
 	return NewRouterWithOptions(context.Background(), client, cfg)
 }
 
 // NewRouterWithOptions builds the router.
-//
-// ctx bounds the lifetime of background work, so cancelling it stops the
-// expired-event reaper. Expired events are never served; the reaper only
-// reclaims their memory.
 func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) (http.Handler, error) {
 	mux := http.NewServeMux()
-	store, err := events.NewStoreAt(cfg.EventsDBPath, cfg.MaxEventBytes)
-	if err != nil {
-		return nil, err
-	}
-	store.StartReaper(ctx, events.ReapInterval)
-	if len(cfg.SyncNodes) > 0 {
-		syncer := sync.New(store, cfg.SyncNodes, sync.DefaultInterval)
-		go syncer.Run(ctx)
-		log.Printf("sync: federating with %d peer(s): %s", len(cfg.SyncNodes), strings.Join(cfg.SyncNodes, ", "))
-	}
-	go func() {
-		<-ctx.Done()
-		if err := store.Close(); err != nil {
-			log.Printf("events: closing database: %v", err)
-		}
-	}()
 	mux.HandleFunc("/", serveIndex)
-	mux.Handle("/stats", &statsHandler{client: client, events: store})
+	mux.Handle("/stats", &statsHandler{client: client})
 	mux.Handle("/up", &uploadHandler{client: client})
 	mux.Handle("/upf", &uploadHandler{client: client, folder: true})
 	mux.Handle("/cid/{cid}", &cidHandler{client: client})
-	mux.Handle("/events", events.NewHandler(store))
-	mux.Handle("/events/", events.NewHandler(store))
 	mux.HandleFunc("/healthz", healthzHandler(client))
 	return corsMiddleware(mux), nil
 }
