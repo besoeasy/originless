@@ -143,6 +143,8 @@
     .formats .format-row { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .75rem; }
     .formats .format-row:last-child { margin-bottom: 0; }
     .format-label { font-size: .75rem; color: var(--muted); }
+    .format-line { display: flex; align-items: stretch; gap: .5rem; }
+    .format-line .format-value { flex: 1; min-width: 0; }
     .format-value {
       font-family: var(--mono);
       font-size: .8rem;
@@ -154,6 +156,26 @@
       word-break: break-all;
       overflow-wrap: anywhere;
     }
+    .copy-btn {
+      flex-shrink: 0;
+      padding: .35rem .6rem;
+      font-size: .7rem;
+      border-radius: 6px;
+      color: var(--muted);
+    }
+    .copy-btn:hover { color: var(--fg); }
+    .history-actions { display: flex; gap: .35rem; flex-shrink: 0; align-items: center; }
+    .history-actions a, .history-actions button {
+      font-size: .7rem; padding: .25rem .5rem; border-radius: 6px; color: var(--muted);
+      text-decoration: none; border: 1px solid var(--border); background: var(--card);
+    }
+    .history-actions a:hover, .history-actions button:hover { color: var(--fg); border-color: var(--fg); }
+    .toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(10px);
+      background: var(--fg); color: var(--bg); padding: .55rem .9rem; border-radius: 8px;
+      font-size: .8rem; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 10;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     .links { text-align: center; margin-top: 2rem; }
     .gh-button {
       display: inline-flex; align-items: center; gap: .5rem;
@@ -206,11 +228,17 @@
       <div class="card-label"><span>Access your content</span></div>
       <div class="format-row">
         <span class="format-label">IPFS protocol</span>
-        <div class="format-value" id="fmt-ipfs">ipfs://&lt;CID&gt;</div>
+        <div class="format-line">
+          <div class="format-value" id="fmt-ipfs">ipfs://&lt;CID&gt;</div>
+          <button class="copy-btn" type="button" data-copy="fmt-ipfs">Copy</button>
+        </div>
       </div>
       <div class="format-row">
         <span class="format-label">Trustless gateway</span>
-        <div class="format-value" id="fmt-gw">https://trustless-gateway.link/ipfs/&lt;CID&gt;</div>
+        <div class="format-line">
+          <div class="format-value" id="fmt-gw">https://trustless-gateway.link/ipfs/&lt;CID&gt;</div>
+          <button class="copy-btn" type="button" data-copy="fmt-gw">Copy</button>
+        </div>
       </div>
     </div>
 
@@ -245,6 +273,8 @@
     </div>
   </div>
 
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
   <script>
     const refreshBtn = document.getElementById("refresh");
     const dropzone = document.getElementById("dropzone");
@@ -273,6 +303,32 @@
       while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
       return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
     }
+
+    let toastTimer = null;
+    function toast(message) {
+      const el = document.getElementById("toast");
+      if (!el) return;
+      el.textContent = message;
+      el.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast("Copied");
+      } catch (_) {
+        toast("Copy failed");
+      }
+    }
+
+    document.querySelectorAll("[data-copy]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = document.getElementById(btn.dataset.copy);
+        if (target) copyText(target.textContent);
+      });
+    });
 
     function setDot(ok) {
       statusDot.className = ok ? "dot" : "dot off";
@@ -328,11 +384,29 @@
 
     function addHistoryEntry(data, totalBytes) {
       const li = document.createElement("li");
+      const info = document.createElement("div");
+      info.style.minWidth = "0";
       const name = document.createElement("strong");
       name.textContent = data.name || "file";
-      const sizeSpan = document.createElement("span");
+      const sizeSpan = document.createElement("div");
+      sizeSpan.style.marginTop = "2px";
       sizeSpan.textContent = `${formatBytes(data.bytes || data.size || totalBytes)} · ${data.cid}`;
-      li.append(name, sizeSpan);
+      info.append(name, sizeSpan);
+
+      const actions = document.createElement("div");
+      actions.className = "history-actions";
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.textContent = "Copy CID";
+      copyBtn.addEventListener("click", () => copyText(data.cid));
+      const openLink = document.createElement("a");
+      openLink.href = `https://trustless-gateway.link/ipfs/${data.cid}`;
+      openLink.target = "_blank";
+      openLink.rel = "noopener noreferrer";
+      openLink.textContent = "Open";
+      actions.append(copyBtn, openLink);
+
+      li.append(info, actions);
       uploadHistory.prepend(li);
       updateFormats(data.cid);
     }
