@@ -31,17 +31,60 @@
       justify-content: center;
       min-height: 100vh;
       padding: 2rem 1rem;
+      position: relative;
+      overflow-x: hidden;
     }
-    .wrap { width: 100%; max-width: 560px; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(to right, var(--border) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+      background-size: 48px 48px;
+      opacity: .35;
+      mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+      -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 40%, transparent 100%);
+      pointer-events: none;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      top: -160px; left: 50%;
+      transform: translateX(-50%);
+      width: 640px; height: 320px;
+      background: radial-gradient(ellipse at center, rgba(99,102,241,.18), transparent 70%);
+      pointer-events: none;
+    }
+    .wrap { width: 100%; max-width: 640px; position: relative; z-index: 1; }
     .hero { text-align: center; margin-bottom: 2.5rem; }
-    .hero h1 { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.04em; margin: 0 0 .5rem; }
-    .hero p { color: var(--muted); margin: 0; font-size: 1.05rem; }
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: .4rem;
+      border: 1px solid var(--border); background: var(--card);
+      color: var(--muted); padding: .3rem .75rem; font-size: .75rem;
+      border-radius: 999px; margin-bottom: 1.25rem;
+    }
+    .eyebrow .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+    .eyebrow .dot.off { background: #ef4444; }
+    .hero h1 {
+      font-size: 3rem; font-weight: 700; letter-spacing: -.045em; margin: 0 0 .6rem;
+      background: linear-gradient(180deg, var(--fg) 30%, var(--muted) 90%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+    }
+    .hero p { color: var(--muted); margin: 0; font-size: 1.05rem; max-width: 480px; margin-left:auto; margin-right:auto; }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 1.5rem;
       margin-bottom: 1rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    }
+    .card-label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: .7rem; text-transform: uppercase; letter-spacing: .1em;
+      color: var(--muted); font-weight: 600; margin-bottom: 1rem;
     }
     .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; justify-content: center; }
     button {
@@ -62,7 +105,7 @@
     #dropzone {
       border: 1px dashed var(--border);
       border-radius: var(--radius);
-      padding: 2.5rem 1rem;
+      padding: 2.25rem 1rem;
       text-align: center;
       color: var(--muted);
       cursor: pointer;
@@ -70,21 +113,34 @@
       font-size: .95rem;
     }
     #dropzone.drag { border-color: var(--fg); background: rgba(127,127,127,.06); color: var(--fg); }
-    #upload-status { margin-top: .75rem; color: var(--muted); font-size: .85rem; text-align: center; min-height: 1.2em; }
+    #dropzone svg { display: block; margin: 0 auto .75rem; opacity: .7; }
+    #upload-status { margin-top: .75rem; color: var(--muted); font-size: .85rem; text-align: center; min-height: 1.2em; font-family: var(--mono); }
+    #upload-bar { height: 4px; border-radius: 2px; background: var(--border); margin: .75rem auto 0; max-width: 360px; overflow: hidden; display: none; }
+    #upload-bar > div { height: 100%; width: 0%; background: var(--accent); transition: width .2s ease; }
     ul.history { list-style: none; padding: 0; margin: 1rem 0 0; }
     ul.history li {
       padding: .75rem 0;
       border-top: 1px solid var(--border);
-      font-size: .85rem;
+      font-size: .8rem;
       word-break: break-all;
       font-family: var(--mono);
+      color: var(--muted);
+      display: flex; justify-content: space-between; gap: 1rem;
     }
+    ul.history li strong { color: var(--fg); font-weight: 600; }
     ul.history li:first-child { border-top: none; }
-    .stats { color: var(--muted); font-size: .85rem; text-align: center; margin: .5rem 0 0; }
+    .stats { color: var(--muted); font-size: .85rem; margin: .4rem 0 0; }
     .stats strong { color: var(--fg); font-weight: 600; }
-    .formats { margin-top: 1.5rem; }
-    .formats h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .75rem; font-weight: 600; }
-    .format-row { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .75rem; }
+    .status-grid { display: flex; align-items: center; gap: 1.25rem; }
+    .status-grid svg { flex-shrink: 0; }
+    .status-text { flex: 1; min-width: 0; }
+    .ring-bg, .ring-fg { fill: none; stroke-width: 8; }
+    .ring-bg { stroke: var(--border); }
+    .ring-fg { stroke: var(--fg); stroke-linecap: round; transition: stroke-dashoffset .4s ease; }
+    .ring-label { font-size: 14px; font-weight: 600; fill: var(--fg); }
+    .ring-sub { font-size: 7px; letter-spacing: .05em; fill: var(--muted); text-transform: uppercase; }
+    .formats .format-row { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .75rem; }
+    .formats .format-row:last-child { margin-bottom: 0; }
     .format-label { font-size: .75rem; color: var(--muted); }
     .format-value {
       font-family: var(--mono);
@@ -95,53 +151,71 @@
       border-radius: 6px;
       color: var(--fg);
       word-break: break-all;
+      overflow-wrap: anywhere;
     }
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .feature { text-align: center; padding: 1rem .75rem; }
+    .feature .icon {
+      width: 44px; height: 44px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto .6rem;
+    }
+    .feature p { font-size: .75rem; color: var(--muted); margin: 0; line-height: 1.5; }
+    .feature p.title { color: var(--fg); font-weight: 600; font-size: .8rem; margin-bottom: .4rem; }
     .links { text-align: center; margin-top: 2rem; }
     .links a { color: var(--muted); text-decoration: none; font-size: .85rem; }
     .links a:hover { color: var(--fg); }
-    input[type=file] { display: none; }
+    @media (max-width: 520px) {
+      .hero h1 { font-size: 2.25rem; }
+      .features { grid-template-columns: 1fr; }
+      .status-grid { flex-wrap: wrap; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="hero">
+      <div class="eyebrow"><span class="dot" id="status-dot"></span><span id="eyebrow-text">Node live</span></div>
       <h1>Originless</h1>
-      <p>Content-addressed file uploads over IPFS.</p>
+      <p>Content-addressed file uploads over IPFS. One container, no account system, no extra infrastructure.</p>
     </div>
 
     <div class="card">
-      <div id="dropzone">Drop files or folders here, or click to select</div>
+      <div class="card-label"><span>Upload</span><span id="up-meta">multipart/form-data</span></div>
+      <div id="dropzone">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Drop files or folders here, or click to select
+      </div>
       <div class="row" style="margin-top: 1rem;">
         <button id="pick-files" type="button">Choose files</button>
         <button id="pick-folder" type="button">Choose folder</button>
       </div>
-      <input id="file-input" type="file" multiple>
-      <input id="folder-input" type="file" webkitdirectory directory multiple>
       <div id="upload-status"></div>
+      <div id="upload-bar"><div></div></div>
       <ul class="history" id="upload-history"></ul>
     </div>
 
     <div class="card">
-      <h3 style="margin:0 0 .75rem; font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600;">Node status</h3>
-      <div class="row" style="align-items:center; gap:1.25rem;">
+      <div class="card-label"><span>Node status</span><button id="refresh" type="button" style="padding:.25rem .625rem; font-size:.7rem;">Refresh</button></div>
+      <div class="status-grid">
         <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
-          <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border)" stroke-width="8" />
-          <circle id="storage-ring" cx="44" cy="44" r="36" fill="none" stroke="var(--fg)" stroke-width="8"
-            stroke-linecap="round" stroke-dasharray="226.19" stroke-dashoffset="226.19"
-            transform="rotate(-90 44 44)" style="transition: stroke-dashoffset .4s ease;" />
-          <text id="storage-pct-text" x="44" y="48" text-anchor="middle" font-size="14" font-weight="600" fill="var(--fg)">—</text>
+          <circle class="ring-bg" cx="44" cy="44" r="36" />
+          <circle id="storage-ring" class="ring-fg" cx="44" cy="44" r="36"
+            stroke-dasharray="226.19" stroke-dashoffset="226.19" transform="rotate(-90 44 44)" />
+          <text id="storage-pct-text" class="ring-label" x="44" y="42" text-anchor="middle">—</text>
+          <text x="44" y="54" text-anchor="middle" class="ring-sub">storage</text>
         </svg>
-        <div style="flex:1; min-width:0;">
+        <div class="status-text">
           <div class="stats" id="health">Node: checking…</div>
           <div class="stats" id="stats">Loading stats…</div>
           <div class="stats" id="node-detail">—</div>
         </div>
-        <button id="refresh" type="button">Refresh</button>
       </div>
     </div>
 
     <div class="card formats">
-      <h3>Access your content</h3>
+      <div class="card-label"><span>Access your content</span></div>
       <div class="format-row">
         <span class="format-label">IPFS protocol</span>
         <div class="format-value" id="fmt-ipfs">ipfs://&lt;CID&gt;</div>
@@ -149,6 +223,30 @@
       <div class="format-row">
         <span class="format-label">Trustless gateway</span>
         <div class="format-value" id="fmt-gw">https://trustless-gateway.link/ipfs/&lt;CID&gt;</div>
+      </div>
+    </div>
+
+    <div class="card features">
+      <div class="feature">
+        <div class="icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M6.5 16.2 10.5 7"/><path d="m13.5 7 4 9.2"/></svg>
+        </div>
+        <p class="title">Content-addressed</p>
+        <p>Every upload is addressed by its IPFS CID.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13 2 4.5 13.5H12l-1 8.5L20 10.5h-7.5L13 2z"/></svg>
+        </div>
+        <p class="title">Single container</p>
+        <p>One binary beside a Kubo node. Start in one command.</p>
+      </div>
+      <div class="feature">
+        <div class="icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19"/><path d="M12 2.5c3.5 3.5 3.5 15.5 0 19-3.5-3.5-3.5-15.5 0-19z"/></svg>
+        </div>
+        <p class="title">Gateway-ready</p>
+        <p>Serve via any IPFS gateway or trustless link.</p>
       </div>
     </div>
 
@@ -165,12 +263,17 @@
     const pickFiles = document.getElementById("pick-files");
     const pickFolder = document.getElementById("pick-folder");
     const uploadStatus = document.getElementById("upload-status");
+    const uploadBar = document.getElementById("upload-bar");
     const uploadHistory = document.getElementById("upload-history");
     const statsEl = document.getElementById("stats");
     const healthEl = document.getElementById("health");
     const nodeDetail = document.getElementById("node-detail");
     const fmtIpfs = document.getElementById("fmt-ipfs");
     const fmtGw = document.getElementById("fmt-gw");
+    const statusDot = document.getElementById("status-dot");
+    const eyebrowText = document.getElementById("eyebrow-text");
+    const uploadBarInner = uploadBar.firstElementChild;
+    const RING_LENGTH = 226.19;
 
     function formatBytes(bytes) {
       if (!bytes) return "0 B";
@@ -181,34 +284,48 @@
       return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
     }
 
+    function setDot(ok) {
+      statusDot.className = ok ? "dot" : "dot off";
+      eyebrowText.textContent = ok ? "Node live" : "Node offline";
+    }
+
     async function checkHealth() {
       const start = performance.now();
       try {
         const res = await fetch("/healthz", { cache: "no-store" });
         const latency = Math.round(performance.now() - start);
-        healthEl.textContent = res.ok ? `Node: healthy · ${latency}ms` : "Node: degraded";
+        const ok = res.ok;
+        setDot(ok);
+        healthEl.textContent = ok ? `Node: healthy · ${latency}ms` : "Node: degraded";
       } catch (_) {
+        setDot(false);
         healthEl.textContent = "Node: unavailable";
+        statsEl.textContent = "Stats unavailable";
+        nodeDetail.textContent = "—";
+        document.getElementById("storage-ring").setAttribute("stroke-dashoffset", String(RING_LENGTH));
+        document.getElementById("storage-pct-text").textContent = "—";
       }
     }
 
     async function loadStats() {
+      refreshBtn.disabled = true;
       try {
         const res = await fetch("/stats", { cache: "no-store", headers: { Accept: "application/json" } });
         if (!res.ok) throw new Error();
         const data = await res.json();
         const size = data.SizeStat || {};
-        statsEl.innerHTML = `Objects: <strong>${Number(data.NumObjects || 0).toLocaleString()}</strong> · Stored: <strong>${formatBytes(size.RepoSize)}</strong>` + (size.StorageMax ? ` of ${formatBytes(size.StorageMax)}` : "");
+        const objects = Number(data.NumObjects || 0);
+        statsEl.innerHTML = `Objects: <strong>${objects.toLocaleString()}</strong> · Stored: <strong>${formatBytes(size.RepoSize)}</strong>` + (size.StorageMax ? ` of ${formatBytes(size.StorageMax)}` : "");
         const pct = size.StorageMax ? (Number(size.RepoSize) / Number(size.StorageMax)) * 100 : 0;
         const ring = document.getElementById("storage-ring");
         const pctText = document.getElementById("storage-pct-text");
-        if (ring) ring.setAttribute("stroke-dashoffset", String(226.19 * (1 - Math.min(100, pct) / 100)));
+        if (ring) ring.setAttribute("stroke-dashoffset", String(RING_LENGTH * (1 - Math.min(100, pct) / 100)));
         if (pctText) pctText.textContent = size.StorageMax ? `${pct.toFixed(0)}%` : "—";
-        if (nodeDetail) {
-          nodeDetail.textContent = `Storage used: ${pct.toFixed(1)}% · NumObjects: ${Number(data.NumObjects || 0).toLocaleString()} · RepoSize: ${formatBytes(size.RepoSize)}` + (size.StorageMax ? ` / ${formatBytes(size.StorageMax)}` : "");
-        }
+        nodeDetail.textContent = `NumObjects: ${objects.toLocaleString()} · RepoSize: ${formatBytes(size.RepoSize)}` + (size.StorageMax ? ` / ${formatBytes(size.StorageMax)}` : "") + ` · Used: ${pct.toFixed(1)}%`;
       } catch (_) {
         statsEl.textContent = "Stats unavailable";
+      } finally {
+        refreshBtn.disabled = false;
       }
     }
 
@@ -216,6 +333,17 @@
       if (!cid) return;
       fmtIpfs.textContent = `ipfs://${cid}`;
       fmtGw.textContent = `https://trustless-gateway.link/ipfs/${cid}`;
+    }
+
+    function addHistoryEntry(data, totalBytes) {
+      const li = document.createElement("li");
+      const name = document.createElement("strong");
+      name.textContent = data.name || "file";
+      const sizeSpan = document.createElement("span");
+      sizeSpan.textContent = `${formatBytes(data.bytes || data.size || totalBytes)} · ${data.cid}`;
+      li.append(name, sizeSpan);
+      uploadHistory.prepend(li);
+      updateFormats(data.cid);
     }
 
     function uploadFiles(files) {
@@ -227,6 +355,8 @@
       for (const f of list) formData.append("file", f, f.webkitRelativePath || f.name);
 
       uploadStatus.textContent = `Uploading ${list.length} file(s) (${formatBytes(totalBytes)})… 0%`;
+      uploadBar.style.display = "block";
+      uploadBarInner.style.width = "0%";
 
       const xhr = new XMLHttpRequest();
       xhr.open("POST", endpoint, true);
@@ -234,6 +364,7 @@
         if (e.lengthComputable) {
           const pct = Math.round((e.loaded / e.total) * 100);
           uploadStatus.textContent = `Uploading ${list.length} file(s) (${formatBytes(totalBytes)})… ${pct}%`;
+          uploadBarInner.style.width = pct + "%";
         }
       };
       xhr.onload = () => {
@@ -241,16 +372,15 @@
         try { data = JSON.parse(xhr.responseText); } catch (_) {}
         if (xhr.status >= 200 && xhr.status < 300) {
           uploadStatus.textContent = "";
-          const li = document.createElement("li");
-          li.textContent = `${data.name || "file"} — ${data.cid} (${formatBytes(data.bytes || data.size || totalBytes)})`;
-          uploadHistory.prepend(li);
-          updateFormats(data.cid);
+          uploadBar.style.display = "none";
+          addHistoryEntry(data, totalBytes);
           loadStats();
         } else {
           uploadStatus.textContent = "Upload failed: " + (data.error || `HTTP ${xhr.status}`);
+          uploadBar.style.display = "none";
         }
       };
-      xhr.onerror = () => { uploadStatus.textContent = "Upload failed: network error"; };
+      xhr.onerror = () => { uploadStatus.textContent = "Upload failed: network error"; uploadBar.style.display = "none"; };
       xhr.send(formData);
     }
 
@@ -289,9 +419,11 @@
     folderInput.addEventListener("change", () => { if (folderInput.files.length) uploadFiles(folderInput.files); });
     if (pickFiles) pickFiles.addEventListener("click", () => fileInput.click());
     if (pickFolder) pickFolder.addEventListener("click", () => folderInput.click());
+    refreshBtn.addEventListener("click", () => { loadStats(); checkHealth(); });
 
     loadStats();
     checkHealth();
+    setInterval(() => { checkHealth(); loadStats(); }, 30000);
   </script>
   <!-- Refresh stats Shared Canvas Signed Chat -->
 </body>
