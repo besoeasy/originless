@@ -9,6 +9,8 @@ Upload a file at home. Fetch it from anywhere by its CID. No domain, no DNS, no 
 [![IPFS](https://img.shields.io/badge/IPFS-Kubo-65C2CB?logo=ipfs&logoColor=white)](https://ipfs.tech/)
 [![GitHub stars](https://img.shields.io/github/stars/besoeasy/originless?style=social)](https://github.com/besoeasy/originless/stargazers)
 
+[![Originless dashboard](docs/dashboard.png)](https://originless.space/)
+
 > **The short version:** keep your originals on your computer. If a file disappears from the node, upload it again — the CID comes back identical. Permanence is a habit, not a subscription.
 
 ## Why links die
