@@ -103,25 +103,39 @@
       }
     }
 
-    async function uploadFiles(files) {
+    function uploadFiles(files) {
       const list = Array.from(files);
-      uploadStatus.textContent = `Uploading ${list.length} file(s)…`;
+      const totalBytes = list.reduce((sum, f) => sum + (f.size || 0), 0);
       const hasFolder = list.some((f) => f.webkitRelativePath && f.webkitRelativePath.includes("/"));
       const endpoint = hasFolder ? "/upf" : "/up";
       const formData = new FormData();
       for (const f of list) formData.append("file", f, f.webkitRelativePath || f.name);
-      try {
-        const res = await fetch(endpoint, { method: "POST", body: formData });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
-        uploadStatus.textContent = "";
-        const li = document.createElement("li");
-        li.textContent = `${data.name || "file"} — ${data.cid} (${formatBytes(data.bytes || data.size)})`;
-        uploadHistory.prepend(li);
-        loadStats();
-      } catch (err) {
-        uploadStatus.textContent = "Upload failed: " + err.message;
-      }
+
+      uploadStatus.textContent = `Uploading ${list.length} file(s) (${formatBytes(totalBytes)})… 0%`;
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", endpoint, true);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          uploadStatus.textContent = `Uploading ${list.length} file(s) (${formatBytes(totalBytes)})… ${pct}%`;
+        }
+      };
+      xhr.onload = () => {
+        let data = {};
+        try { data = JSON.parse(xhr.responseText); } catch (_) {}
+        if (xhr.status >= 200 && xhr.status < 300) {
+          uploadStatus.textContent = "";
+          const li = document.createElement("li");
+          li.textContent = `${data.name || "file"} — ${data.cid} (${formatBytes(data.bytes || data.size || totalBytes)})`;
+          uploadHistory.prepend(li);
+          loadStats();
+        } else {
+          uploadStatus.textContent = "Upload failed: " + (data.error || `HTTP ${xhr.status}`);
+        }
+      };
+      xhr.onerror = () => { uploadStatus.textContent = "Upload failed: network error"; };
+      xhr.send(formData);
     }
 
     dropzone.addEventListener("click", () => fileInput.click());
