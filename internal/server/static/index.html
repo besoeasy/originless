@@ -123,12 +123,21 @@
 
     <div class="card">
       <h3 style="margin:0 0 .75rem; font-size:.75rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-weight:600;">Node status</h3>
-      <div class="row" style="justify-content:space-between;">
-        <span class="stats" id="health">Node: checking…</span>
+      <div class="row" style="align-items:center; gap:1.25rem;">
+        <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+          <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border)" stroke-width="8" />
+          <circle id="storage-ring" cx="44" cy="44" r="36" fill="none" stroke="var(--fg)" stroke-width="8"
+            stroke-linecap="round" stroke-dasharray="226.19" stroke-dashoffset="226.19"
+            transform="rotate(-90 44 44)" style="transition: stroke-dashoffset .4s ease;" />
+          <text id="storage-pct-text" x="44" y="48" text-anchor="middle" font-size="14" font-weight="600" fill="var(--fg)">—</text>
+        </svg>
+        <div style="flex:1; min-width:0;">
+          <div class="stats" id="health">Node: checking…</div>
+          <div class="stats" id="stats">Loading stats…</div>
+          <div class="stats" id="node-detail">—</div>
+        </div>
         <button id="refresh" type="button">Refresh</button>
       </div>
-      <p class="stats" id="stats">Loading stats…</p>
-      <p class="stats" id="node-detail">—</p>
     </div>
 
     <div class="card formats">
@@ -190,9 +199,13 @@
         const data = await res.json();
         const size = data.SizeStat || {};
         statsEl.innerHTML = `Objects: <strong>${Number(data.NumObjects || 0).toLocaleString()}</strong> · Stored: <strong>${formatBytes(size.RepoSize)}</strong>` + (size.StorageMax ? ` of ${formatBytes(size.StorageMax)}` : "");
+        const pct = size.StorageMax ? (Number(size.RepoSize) / Number(size.StorageMax)) * 100 : 0;
+        const ring = document.getElementById("storage-ring");
+        const pctText = document.getElementById("storage-pct-text");
+        if (ring) ring.setAttribute("stroke-dashoffset", String(226.19 * (1 - Math.min(100, pct) / 100)));
+        if (pctText) pctText.textContent = size.StorageMax ? `${pct.toFixed(0)}%` : "—";
         if (nodeDetail) {
-          const pct = size.StorageMax ? ((Number(size.RepoSize) / Number(size.StorageMax)) * 100).toFixed(1) : "—";
-          nodeDetail.textContent = `Storage used: ${pct}% · NumObjects: ${Number(data.NumObjects || 0).toLocaleString()} · RepoSize: ${formatBytes(size.RepoSize)}` + (size.StorageMax ? ` / ${formatBytes(size.StorageMax)}` : "");
+          nodeDetail.textContent = `Storage used: ${pct.toFixed(1)}% · NumObjects: ${Number(data.NumObjects || 0).toLocaleString()} · RepoSize: ${formatBytes(size.RepoSize)}` + (size.StorageMax ? ` / ${formatBytes(size.StorageMax)}` : "");
         }
       } catch (_) {
         statsEl.textContent = "Stats unavailable";
