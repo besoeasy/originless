@@ -25,7 +25,7 @@ A file's address is its **CID**, a cryptographic hash of the bytes. The address 
 
 1. **Run one container.** Kubo, the HTTP API, and a dashboard ship together.
 2. **Upload a file or folder.** You get back a CID.
-3. **Fetch it by CID.** Through your node's `/ipfs/<cid>` route, any IPFS-capable client, or a public gateway.
+3. **Fetch it by CID.** Through your node's `/ipfs/<cid>` route, or any IPFS-capable client that can reach a node holding the bytes.
 
 No account. No API key. No database. No reverse proxy.
 
@@ -146,11 +146,13 @@ curl -fL "http://localhost:3232/ipfs/<cid>?filename=hello.txt" -o hello.txt
 
 Open `http://localhost:3232/ipfs/<cid>` in a browser to view the content. The gateway supports `Range` requests and `ETag`s, so audio/video seeking and conditional downloads work.
 
-The same CID works from anywhere with an IPFS-capable client or public gateway:
+The same CID works with any IPFS-capable client or gateway that can reach a node holding the bytes:
 
 - Browser: [inbrowser.link/ipfs/](https://inbrowser.link/ipfs/)
 - Apps: [Helia Verified Fetch](https://github.com/ipfs/helia-verified-fetch)
 - Gateways: [Rainbow](https://github.com/ipfs/rainbow) or any `https://<gateway>/ipfs/<cid>`
+
+The quick start publishes your node's HTTP port. The swarm listener stays internal by default, so a public gateway can only fetch the file if you publish the swarm port or another node holds a copy.
 
 ### Folders
 
@@ -231,6 +233,10 @@ IPFS is a network and an addressing scheme, not a free backup. Someone has to st
 ### Do I need a domain or a public gateway?
 
 No. `/ipfs/` is local-only by default. Enable `IPFS_GATEWAY_FETCH=true` only if you want the node to retrieve arbitrary CIDs from the network.
+
+### Do I still need a public address?
+
+Yes. The CID replaces the domain and origin, not the network. People need a route to a node that holds the bytes — your published HTTP port, a tunnel, a VPN, or another IPFS node with a copy.
 
 ### Does re-uploading duplicate data?
 
