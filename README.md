@@ -21,7 +21,7 @@ docker run -d --name originless \
   ghcr.io/besoeasy/originless:latest
 ```
 
-Open the built-in dashboard at [http://localhost:3232](http://localhost:3232). IPFS storage is temporary: the repository lives inside the container and is removed with the container.
+Open the built-in dashboard at [http://localhost:3232](http://localhost:3232). IPFS storage inside the container is temporary, but CIDs are permanent: re-uploading the same file always restores it at the same address.
 
 Check readiness with:
 
@@ -75,13 +75,23 @@ http://localhost:3232/ipfs/<cid>/folder/nested/two.txt
 | `PORT` | `3232` | HTTP port inside the container. |
 | `IPFS_GATEWAY_FETCH` | `false` | Sets Kubo's `Gateway.NoFetch`. When `false`, `/ipfs/` serves only CIDs stored locally. |
 
-Originless treats IPFS storage as temporary. Uploads are **unpinned** by default: hourly garbage collection at a 90% watermark may drop old content, and removing the container discards the repository. Pin a CID to protect it from collection while the container is running:
+Originless treats IPFS storage as temporary: the repository lives inside the container and is removed with the container. Uploads are **unpinned** by default, so hourly garbage collection at a 90% watermark may also drop old content while the container is running.
+
+That does not mean the file's address is lost. A CID is the hash of the content, so uploading the exact same file (or folder) again always produces the same CID. You can use Originless as permanent storage by keeping your own copy and re-uploading it whenever the CID stops resolving:
+
+```bash
+# after a container replacement or GC, restore the same address
+curl -F "file=@hello.txt" http://localhost:3232/up
+# returns the same CID as before
+```
+
+Pin a CID if you want to protect it from garbage collection while the container is running:
 
 ```bash
 docker exec originless ipfs pin add <cid>
 ```
 
-Keep another copy of anything you need to retain permanently.
+Links and embeds that point at the CID keep working after re-upload, because the address is derived from the bytes and never changes.
 
 ## Routes
 
