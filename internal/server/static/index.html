@@ -141,7 +141,35 @@
     dropzone.addEventListener("click", () => fileInput.click());
     dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("drag"); });
     dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
-    dropzone.addEventListener("drop", (e) => { e.preventDefault(); dropzone.classList.remove("drag"); if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); });
+    async function collectDroppedFiles(dataTransfer) {
+      const items = dataTransfer.items;
+      if (!items || !items.length || typeof items[0].webkitGetAsEntry !== "function") {
+        return Array.from(dataTransfer.files || []);
+      }
+      const entries = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry();
+        if (entry) entries.push(entry);
+      }
+      const files = [];
+      async function walk(entry, pathPrefix) {
+        if (entry.isFile) {
+          const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+          const relative = pathPrefix ? pathPrefix + "/" + file.name : file.name;
+          // Attach relative path for uploadFiles
+          Object.defineProperty(file, "webkitRelativePath", { value: relative, writable: true });
+          files.push(file);
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+          for (const child of batch) await walk(child, pathPrefix ? pathPrefix + "/" + entry.name : entry.name);
+        }
+      }
+      for (const entry of entries) await walk(entry, "");
+      return files.length ? files : Array.from(dataTransfer.files || []);
+    }
+
+    dropzone.addEventListener("drop", async (e) => { e.preventDefault(); dropzone.classList.remove("drag"); const files = await collectDroppedFiles(e.dataTransfer); if (files.length) uploadFiles(files); });
     fileInput.addEventListener("change", () => { if (fileInput.files.length) uploadFiles(fileInput.files); });
     folderInput.addEventListener("change", () => { if (folderInput.files.length) uploadFiles(folderInput.files); });
     if (pickFiles) pickFiles.addEventListener("click", () => fileInput.click());
