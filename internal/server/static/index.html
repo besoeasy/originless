@@ -234,7 +234,14 @@
         </div>
       </div>
       <div class="format-row">
-        <span class="format-label">Trustless gateway</span>
+        <span class="format-label">This node</span>
+        <div class="format-line">
+          <div class="format-value" id="fmt-local">/ipfs/&lt;CID&gt;</div>
+          <button class="copy-btn" type="button" data-copy="fmt-local">Copy</button>
+        </div>
+      </div>
+      <div class="format-row">
+        <span class="format-label">Public gateway</span>
         <div class="format-line">
           <div class="format-value" id="fmt-gw">https://trustless-gateway.link/ipfs/&lt;CID&gt;</div>
           <button class="copy-btn" type="button" data-copy="fmt-gw">Copy</button>
@@ -289,6 +296,7 @@
     const healthEl = document.getElementById("health");
     const nodeDetail = document.getElementById("node-detail");
     const fmtIpfs = document.getElementById("fmt-ipfs");
+    const fmtLocal = document.getElementById("fmt-local");
     const fmtGw = document.getElementById("fmt-gw");
     const statusDot = document.getElementById("status-dot");
     const eyebrowText = document.getElementById("eyebrow-text");
@@ -378,6 +386,7 @@
     function updateFormats(cid) {
       if (!cid) return;
       fmtIpfs.textContent = `ipfs://${cid}`;
+      fmtLocal.textContent = `${location.origin}/ipfs/${cid}`;
       fmtGw.textContent = `https://trustless-gateway.link/ipfs/${cid}`;
       document.getElementById("formats-card").hidden = false;
     }
@@ -400,11 +409,16 @@
       copyBtn.textContent = "Copy CID";
       copyBtn.addEventListener("click", () => copyText(data.cid));
       const openLink = document.createElement("a");
-      openLink.href = `https://trustless-gateway.link/ipfs/${data.cid}`;
+      openLink.href = `/ipfs/${data.cid}`;
       openLink.target = "_blank";
       openLink.rel = "noopener noreferrer";
       openLink.textContent = "Open";
-      actions.append(copyBtn, openLink);
+      const publicLink = document.createElement("a");
+      publicLink.href = `https://trustless-gateway.link/ipfs/${data.cid}`;
+      publicLink.target = "_blank";
+      publicLink.rel = "noopener noreferrer";
+      publicLink.textContent = "Public";
+      actions.append(copyBtn, openLink, publicLink);
 
       li.append(info, actions);
       uploadHistory.prepend(li);

@@ -25,6 +25,9 @@ Open the built-in dashboard at [http://localhost:3232](http://localhost:3232).
 ```bash
 # upload — returns the CID
 curl -F "file=@hello.txt" http://localhost:3232/up
+
+# fetch it back through this node's gateway
+curl http://localhost:3232/ipfs/<cid>
 ```
 
 That CID now works from anywhere, for anyone with an IPFS-capable client or gateway:
@@ -48,6 +51,7 @@ curl \
 | --- | --- | --- |
 | `STORAGE_MAX` | `20GB` | Soft limit for the IPFS repository. |
 | `PORT` | `3232` | HTTP port inside the container. |
+| `IPFS_GATEWAY_URL` | `http://127.0.0.1:8080` | Kubo gateway used by `/ipfs/`. The bundled entrypoint starts it on this address. |
 
 By default uploads are **unpinned**: hourly garbage collection at a 90% watermark may drop old content, and a CID can become unavailable after collection. Mount a volume at `/data` to keep the repository across container replacement, and pin CIDs you want to guarantee.
 
@@ -61,6 +65,11 @@ By default uploads are **unpinned**: hourly garbage collection at a 90% watermar
 | `POST` | `/up` | Upload a file or folder |
 | `POST` | `/upf` | Explicit folder upload |
 | `GET` | `/cid/{cid}` | Metadata and local availability for a CID |
+| `GET`, `HEAD` | `/ipfs/{cid}[/path]` | File or directory via the local Kubo gateway |
+
+`/ipfs/` proxies to Kubo's gateway on `127.0.0.1:8080`, so directories get
+index pages and files support `Range`, `ETag` and `?filename=`. When a CID is
+not stored locally, the gateway fetches it from the IPFS network if it can.
 
 ## Development
 

@@ -16,14 +16,20 @@ import (
 // Defaults for the environment-driven settings.
 const (
 	DefaultStorageMax = "20GB"
+	DefaultGatewayURL = "http://127.0.0.1:8080"
 )
 
-// Config holds every tunable setting. The IPFS endpoint and upload
+// Config holds every tunable setting. The IPFS API endpoint and upload
 // spool directory are fixed: the app always runs beside its Kubo daemon.
 type Config struct {
 	// StorageMax is the human-readable limit applied to the Kubo
 	// repository, shared with the entrypoint.
 	StorageMax string
+
+	// GatewayURL is the local Kubo HTTP gateway that /ipfs/ proxies to.
+	// It is only meant to change when Kubo runs somewhere other than
+	// beside the app (for example during development).
+	GatewayURL string
 }
 
 // Default returns the configuration used when nothing is set in the
@@ -31,6 +37,7 @@ type Config struct {
 func Default() Config {
 	return Config{
 		StorageMax: DefaultStorageMax,
+		GatewayURL: DefaultGatewayURL,
 	}
 }
 
@@ -81,10 +88,14 @@ func FromEnv(getenv func(string) (string, bool)) (Config, error) {
 		}
 	}
 
+	if value, ok := getenv("IPFS_GATEWAY_URL"); ok && strings.TrimSpace(value) != "" {
+		cfg.GatewayURL = strings.TrimSpace(value)
+	}
+
 	return cfg, nil
 }
 
 // Describe renders the settings, for the startup log line.
 func (c Config) Describe() string {
-	return fmt.Sprintf("storage_max=%q", c.StorageMax)
+	return fmt.Sprintf("storage_max=%q gateway_url=%q", c.StorageMax, c.GatewayURL)
 }

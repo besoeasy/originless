@@ -12,6 +12,12 @@ if [ ! -f "$IPFS_REPO/config" ]; then
 	ipfs init --profile=lowpower
 fi
 ipfs config --json Routing.Type '"dhtclient"'
+# The Go app proxies /ipfs/ to this gateway. Keep it on loopback so the only
+# public port remains Originless itself.
+if ! ipfs config --json Addresses.Gateway '"/ip4/127.0.0.1/tcp/8080"'; then
+	echo "originless: invalid gateway configuration" >&2
+	exit 1
+fi
 if ! ipfs config --json Datastore.StorageMax "\"$STORAGE_MAX\"" \
 	|| ! ipfs config --json Datastore.StorageGCWatermark "$STORAGE_GC_WATERMARK" \
 	|| ! ipfs config --json Datastore.GCPeriod "\"$STORAGE_GC_PERIOD\""; then
