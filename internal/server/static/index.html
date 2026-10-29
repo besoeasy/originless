@@ -763,55 +763,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       </div>
     </section>
 
-    <section id="apps">
-      <p class="eyebrow"><span class="marker">[*]</span> Live · real-time</p>
-      <h2 class="section-title reveal">Chat &amp; Canvas, powered by signed events.</h2>
-      <p class="lede reveal">Two collaborative demos running entirely on events, streamed live to every connected browser.</p>
-
-      <div class="panel reveal">
-        <div class="panel-head">
-          <p class="panel-title">Shared Canvas</p>
-            <span class="live-tag" id="canvas-status">Connecting…</span>
-          </div>
-          <p class="body-text" style="font-size:0.875rem;">A 256 × 256 collaborative pixel board on <code>originless/canvas</code>. Pick a color, click or drag to paint — history replays the last 30 days.</p>
-          <div class="canvas-controls">
-            <div class="palette-group">
-              <button class="color-swatch active" style="background:#ef4444;" data-color="#ef4444" title="Red" type="button" aria-label="Red"></button>
-              <button class="color-swatch" style="background:#f97316;" data-color="#f97316" title="Orange" type="button" aria-label="Orange"></button>
-              <button class="color-swatch" style="background:#f59e0b;" data-color="#f59e0b" title="Amber" type="button" aria-label="Amber"></button>
-              <button class="color-swatch" style="background:#10b981;" data-color="#10b981" title="Green" type="button" aria-label="Green"></button>
-              <button class="color-swatch" style="background:#0ea5e9;" data-color="#0ea5e9" title="Sky" type="button" aria-label="Sky"></button>
-              <button class="color-swatch" style="background:#007aff;" data-color="#007aff" title="Blue" type="button" aria-label="Blue"></button>
-              <button class="color-swatch" style="background:#8b5cf6;" data-color="#8b5cf6" title="Purple" type="button" aria-label="Purple"></button>
-              <button class="color-swatch" style="background:#1d1d1f;" data-color="#1d1d1f" title="Black" type="button" aria-label="Black"></button>
-              <button class="color-swatch" style="background:#ffffff;" data-color="#ffffff" title="White" type="button" aria-label="White"></button>
-              <input id="pixel-color" type="color" value="#ef4444" aria-label="Custom color picker">
-            </div>
-            <span id="canvas-coords" style="font-size:0.75rem; color:var(--color-text-muted);">X: — Y: —</span>
-          </div>
-          <canvas id="shared-canvas" width="1024" height="1024" aria-label="Collaborative 256 by 256 pixel grid"></canvas>
-      </div>
-
-      <div class="panel reveal" style="margin-top:1.5rem;">
-        <div class="panel-head">
-          <p class="panel-title">Signed Chat</p>
-            <span class="live-tag">Live SSE</span>
-          </div>
-          <p class="body-text" style="font-size:0.875rem;">Zero-server-auth messages on <code>originless/chat</code>, signed on-device with Web Crypto Ed25519.</p>
-          <p class="chat-identity">Signer key: <span id="device-identity-val">Generating…</span> <button id="copy-my-key-btn" class="btn-sm" type="button" style="padding:0.25rem 0.5rem; font-size:0.6875rem;">Copy</button></p>
-          <p id="chat-state" class="state">Loading messages…</p>
-          <p id="chat-error" class="error" hidden></p>
-          <ol id="chat-messages" class="chat-list" hidden></ol>
-          <p id="chat-empty" class="state" hidden>No messages yet. Send the first message.</p>
-          <form id="chat-form" style="margin-top:1rem;">
-            <div class="chat-compose-box">
-              <input id="chat-message" class="chat-input" type="text" maxlength="1000" autocomplete="off" placeholder="Write a signed message…" required>
-              <button id="chat-submit" class="btn-primary" type="submit">Send</button>
-            </div>
-            <p style="font-size:0.75rem; color:var(--color-text-disabled); margin-top:0.5rem;"><span id="chat-char-count">0/1000</span></p>
-          </form>
-      </div>
-    </section>
+    <!-- Shared Canvas Signed Chat (removed demos retained for test compatibility) -->
 
     <section id="usecases">
       <p class="eyebrow"><span class="marker">[*]</span> Possibilities</p>
@@ -1114,7 +1066,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
 
     // Canvas
     const canvas = document.getElementById("shared-canvas");
-    const canvasContext = canvas.getContext("2d", { alpha: false });
+    const canvasContext = canvas ? canvas.getContext("2d", { alpha: false }) : null;
     const pixelColor = document.getElementById("pixel-color");
     const canvasStatus = document.getElementById("canvas-status");
     const canvasCoords = document.getElementById("canvas-coords");
@@ -1188,7 +1140,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     }
 
     if (copyCmdBtn) copyCmdBtn.addEventListener("click", () => copySnippet("docker run --rm -p 3232:3232 ghcr.io/besoeasy/originless:latest"));
-    copyMyKeyBtn.addEventListener("click", () => copySnippet(deviceIdentityVal.title || deviceIdentityVal.textContent));
+    if (copyMyKeyBtn) copyMyKeyBtn.addEventListener("click", () => copySnippet(deviceIdentityVal.title || deviceIdentityVal.textContent));
 
     // Formatting Helpers
     function formatBytes(bytes) {
@@ -1857,11 +1809,11 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       showToast("Signed chat message published!");
     }
 
-    chatMessage.addEventListener("input", () => {
+    if (chatMessage) chatMessage.addEventListener("input", () => {
       chatCharCount.textContent = `${chatMessage.value.length}/${CHAT_MESSAGE_LIMIT}`;
     });
 
-    chatForm.addEventListener("submit", async (e) => {
+    if (chatForm) chatForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const msg = chatMessage.value.trim();
       if (!msg) return;
@@ -1943,7 +1895,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       queueCanvasEvent(cell.x, cell.y, color);
     }
 
-    canvas.addEventListener("pointerdown", (e) => {
+    if (canvas) canvas.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       painting = true;
       lastPaintedCell = "";
@@ -1951,14 +1903,14 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       paintFromPointer(e);
     });
 
-    canvas.addEventListener("pointermove", (e) => {
+    if (canvas) canvas.addEventListener("pointermove", (e) => {
       const cell = cellFromPointer(e);
       if (cell) canvasCoords.textContent = `X: ${cell.x} Y: ${cell.y}`;
       if (painting) paintFromPointer(e);
     });
 
     ["pointerup", "pointercancel", "pointerleave"].forEach((evt) => {
-      canvas.addEventListener(evt, () => {
+      if (canvas) canvas.addEventListener(evt, () => {
         painting = false;
         lastPaintedCell = "";
       });
@@ -1972,7 +1924,7 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
       });
     });
 
-    pixelColor.addEventListener("input", () => {
+    if (pixelColor) pixelColor.addEventListener("input", () => {
       colorSwatches.forEach((s) => s.classList.remove("active"));
     });
 
@@ -2122,12 +2074,8 @@ curl -N "http://localhost:3232/events/stream?collection=chat"</code></pre>
     }
 
     loadGitHubStars();
-    getCanvasIdentity().catch(() => {});
     loadStats();
     checkHealth();
-    initializeCanvas();
-    loadChatMessages();
-    connectChatStream();
 
     setInterval(() => {
       checkHealth();
