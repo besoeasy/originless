@@ -1,7 +1,4 @@
-name: Publish Docker Image
-
-# Builds and pushes the multi-arch container image to GHCR.
-# No GitHub releases or git tags are created; the image is published as :latest.
+name: Docker
 
 on:
   workflow_dispatch:
