@@ -1,19 +1,13 @@
-name: Release
+name: Publish Docker Image
 
-# Version-based release: triggered only by an administrator's manual dispatch.
-# Version numbers NEVER have a 'v' prefix (e.g. 1.0.5).
-# Publishes GitHub Release, builds & pushes multi-arch container to GHCR
-# (ghcr.io/besoeasy/originless:latest and :1.0.5).
+# Builds and pushes the multi-arch container image to GHCR.
+# No GitHub releases or git tags are created; the image is published as :latest.
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Release version tag (e.g. 1.0.5)"
-        required: true
 
 permissions:
-  contents: write
+  contents: read
   packages: write
   id-token: write
 
@@ -26,19 +20,15 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          # Test against the exact version go.mod declares, so a language
-          # feature newer than the module floor cannot slip in unnoticed.
           go-version-file: go.mod
           cache: true
 
@@ -51,27 +41,6 @@ jobs:
           go vet ./...
           go test ./...
           go build -v ./...
-
-      - name: Validate release tag
-        id: tag
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          if [ -z "${INPUT_TAG:-}" ]; then
-            echo "::error::A release version is required in the workflow_dispatch input."
-            exit 1
-          fi
-
-          TAG="${INPUT_TAG#v}"
-          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Release version must look like 1.0.5 (received '$INPUT_TAG')."
-            exit 1
-          fi
-
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Validated release tag: $TAG"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.5.0
@@ -98,7 +67,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=raw,value=${{ steps.tag.outputs.tag }}
 
       - name: Build and push Docker image
         id: build-and-push
@@ -107,7 +75,7 @@ jobs:
           context: .
           push: true
           build-args: |
-            VERSION=${{ steps.tag.outputs.tag }}
+            VERSION=${{ github.sha }}
             GO_VERSION=${{ steps.go.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -120,27 +88,3 @@ jobs:
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
         run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          set -e
-          git fetch origin --tags
-          SHA="${{ github.sha }}"
-          if [ -z "$SHA" ] || [ "$SHA" = "null" ]; then
-            SHA="$(git rev-parse HEAD)"
-          fi
-          PREV=$(git tag -l | grep -E "^(v)?[0-9]+\.[0-9]+\.[0-9]+$" | grep -v "^${TAG}$" | grep -v "^v${TAG}$" | sort -V | tail -n 1)
-          if [ -n "$PREV" ]; then
-            NOTES=$(git log --format='- %h %s' "${PREV}..HEAD")
-          else
-            NOTES=$(git log --format='- %h %s' -10 HEAD)
-          fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists."
-          else
-            gh release create "$TAG" --target "$SHA" --title "$TAG" --generate-notes || \
-            gh release create "$TAG" --target "$SHA" --title "$TAG" --notes "$NOTES"
-          fi
