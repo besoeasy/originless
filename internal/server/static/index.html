@@ -199,25 +199,7 @@
       <ul class="history" id="upload-history"></ul>
     </div>
 
-    <div class="card">
-      <div class="card-label"><span>Node status</span><button id="refresh" type="button" style="padding:.25rem .625rem; font-size:.7rem;">Refresh</button></div>
-      <div class="status-grid">
-        <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
-          <circle class="ring-bg" cx="44" cy="44" r="36" />
-          <circle id="storage-ring" class="ring-fg" cx="44" cy="44" r="36"
-            stroke-dasharray="226.19" stroke-dashoffset="226.19" transform="rotate(-90 44 44)" />
-          <text id="storage-pct-text" class="ring-label" x="44" y="42" text-anchor="middle">—</text>
-          <text x="44" y="54" text-anchor="middle" class="ring-sub">storage</text>
-        </svg>
-        <div class="status-text">
-          <div class="stats" id="health">Node: checking…</div>
-          <div class="stats" id="stats">Loading stats…</div>
-          <div class="stats" id="node-detail">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card formats">
+    <div class="card formats" id="formats-card" hidden>
       <div class="card-label"><span>Access your content</span></div>
       <div class="format-row">
         <span class="format-label">IPFS protocol</span>
@@ -250,6 +232,24 @@
         </div>
         <p class="title">Gateway-ready</p>
         <p>Serve via any IPFS gateway or trustless link.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label"><span>Node status</span><button id="refresh" type="button" style="padding:.25rem .625rem; font-size:.7rem;">Refresh</button></div>
+      <div class="status-grid">
+        <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+          <circle class="ring-bg" cx="44" cy="44" r="36" />
+          <circle id="storage-ring" class="ring-fg" cx="44" cy="44" r="36"
+            stroke-dasharray="226.19" stroke-dashoffset="226.19" transform="rotate(-90 44 44)" />
+          <text id="storage-pct-text" class="ring-label" x="44" y="42" text-anchor="middle">—</text>
+          <text x="44" y="54" text-anchor="middle" class="ring-sub">storage</text>
+        </svg>
+        <div class="status-text">
+          <div class="stats" id="health">Node: checking…</div>
+          <div class="stats" id="stats">Loading stats…</div>
+          <div class="stats" id="node-detail">—</div>
+        </div>
       </div>
     </div>
 
@@ -336,6 +336,7 @@
       if (!cid) return;
       fmtIpfs.textContent = `ipfs://${cid}`;
       fmtGw.textContent = `https://trustless-gateway.link/ipfs/${cid}`;
+      document.getElementById("formats-card").hidden = false;
     }
 
     function addHistoryEntry(data, totalBytes) {
