@@ -42,6 +42,11 @@
     <div class="card">
       <div id="dropzone">Drop files or folders here, or click to select</div>
       <input id="file-input" type="file" multiple hidden>
+      <input id="folder-input" type="file" webkitdirectory directory multiple hidden>
+      <div class="row" style="margin-top:.75rem;">
+        <button id="pick-files" type="button">Choose files</button>
+        <button id="pick-folder" type="button">Choose folder</button>
+      </div>
       <div id="upload-status"></div>
       <ul class="history" id="upload-history"></ul>
     </div>
@@ -51,6 +56,9 @@
     const refreshBtn = document.getElementById("refresh");
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("file-input");
+    const folderInput = document.getElementById("folder-input");
+    const pickFiles = document.getElementById("pick-files");
+    const pickFolder = document.getElementById("pick-folder");
     const uploadStatus = document.getElementById("upload-status");
     const uploadHistory = document.getElementById("upload-history");
     const statsEl = document.getElementById("stats");
@@ -80,11 +88,14 @@
     }
 
     async function uploadFiles(files) {
-      uploadStatus.textContent = `Uploading ${files.length} file(s)…`;
+      const list = Array.from(files);
+      uploadStatus.textContent = `Uploading ${list.length} file(s)…`;
+      const hasFolder = list.some((f) => f.webkitRelativePath && f.webkitRelativePath.includes("/"));
+      const endpoint = hasFolder ? "/upf" : "/up";
       const formData = new FormData();
-      for (const f of files) formData.append("file", f);
+      for (const f of list) formData.append("file", f, f.webkitRelativePath || f.name);
       try {
-        const res = await fetch("/up", { method: "POST", body: formData });
+        const res = await fetch(endpoint, { method: "POST", body: formData });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
         uploadStatus.textContent = "";
@@ -102,6 +113,9 @@
     dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
     dropzone.addEventListener("drop", (e) => { e.preventDefault(); dropzone.classList.remove("drag"); if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); });
     fileInput.addEventListener("change", () => { if (fileInput.files.length) uploadFiles(fileInput.files); });
+    folderInput.addEventListener("change", () => { if (folderInput.files.length) uploadFiles(folderInput.files); });
+    if (pickFiles) pickFiles.addEventListener("click", () => fileInput.click());
+    if (pickFolder) pickFolder.addEventListener("click", () => folderInput.click());
     refreshBtn.addEventListener("click", loadStats);
 
     loadStats();
