@@ -7,6 +7,7 @@ Upload a file at home. Fetch it from anywhere by its CID. No domain, no DNS, no 
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fbesoeasy%2Foriginless-2496ED?logo=docker&logoColor=white)](https://github.com/besoeasy/originless/pkgs/container/originless)
 [![Go](https://img.shields.io/badge/go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![IPFS](https://img.shields.io/badge/IPFS-Kubo-65C2CB?logo=ipfs&logoColor=white)](https://ipfs.tech/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/besoeasy/originless?style=social)](https://github.com/besoeasy/originless/stargazers)
 
 [![Originless dashboard](docs/dashboard.png)](https://originless.space/)
@@ -259,6 +260,10 @@ go vet ./... && go build ./... && go test -race ./...
 ```
 
 Build the image locally: `docker build -t originless:dev .`
+
+## License
+
+MIT © [Aman Singh Katal](https://github.com/besoeasy). See [LICENSE](LICENSE).
 
 ## Star the project
 

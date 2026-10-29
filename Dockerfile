@@ -22,7 +22,8 @@ FROM alpine:latest
 
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="Originless" \
-      org.opencontainers.image.version="${VERSION}"
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="MIT"
 
 # Kubo is Alpine's package name for the IPFS implementation and provides
 # the `ipfs` command-line executable.
