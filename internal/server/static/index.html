@@ -154,16 +154,6 @@
       word-break: break-all;
       overflow-wrap: anywhere;
     }
-    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-    .feature { text-align: center; padding: 1rem .75rem; }
-    .feature .icon {
-      width: 44px; height: 44px; border-radius: 999px;
-      border: 1px solid var(--border); background: var(--bg);
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto .6rem;
-    }
-    .feature p { font-size: .75rem; color: var(--muted); margin: 0; line-height: 1.5; }
-    .feature p.title { color: var(--fg); font-weight: 600; font-size: .8rem; margin-bottom: .4rem; }
     .links { text-align: center; margin-top: 2rem; }
     .gh-button {
       display: inline-flex; align-items: center; gap: .5rem;
@@ -183,7 +173,6 @@
     .gh-stars svg { width: 13px; height: 13px; }
     @media (max-width: 520px) {
       .hero h1 { font-size: 2.25rem; }
-      .features { grid-template-columns: 1fr; }
       .status-grid { flex-wrap: wrap; }
     }
   </style>
@@ -222,48 +211,6 @@
       <div class="format-row">
         <span class="format-label">Trustless gateway</span>
         <div class="format-value" id="fmt-gw">https://trustless-gateway.link/ipfs/&lt;CID&gt;</div>
-      </div>
-    </div>
-
-    <div class="card features">
-      <div class="feature">
-        <div class="icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M6.5 16.2 10.5 7"/><path d="m13.5 7 4 9.2"/></svg>
-        </div>
-        <p class="title">Content-addressed</p>
-        <p>Every upload is addressed by its IPFS CID.</p>
-      </div>
-      <div class="feature">
-        <div class="icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13 2 4.5 13.5H12l-1 8.5L20 10.5h-7.5L13 2z"/></svg>
-        </div>
-        <p class="title">Single container</p>
-        <p>One binary beside a Kubo node. Start in one command.</p>
-      </div>
-      <div class="feature">
-        <div class="icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M2.5 12h19"/><path d="M12 2.5c3.5 3.5 3.5 15.5 0 19-3.5-3.5-3.5-15.5 0-19z"/></svg>
-        </div>
-        <p class="title">Gateway-ready</p>
-        <p>Serve via any IPFS gateway or trustless link.</p>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-label"><span>Node status</span><button id="refresh" type="button" style="padding:.25rem .625rem; font-size:.7rem;">Refresh</button></div>
-      <div class="status-grid">
-        <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
-          <circle class="ring-bg" cx="44" cy="44" r="36" />
-          <circle id="storage-ring" class="ring-fg" cx="44" cy="44" r="36"
-            stroke-dasharray="226.19" stroke-dashoffset="226.19" transform="rotate(-90 44 44)" />
-          <text id="storage-pct-text" class="ring-label" x="44" y="42" text-anchor="middle">—</text>
-          <text x="44" y="54" text-anchor="middle" class="ring-sub">storage</text>
-        </svg>
-        <div class="status-text">
-          <div class="stats" id="health">Node: checking…</div>
-          <div class="stats" id="stats">Loading stats…</div>
-          <div class="stats" id="node-detail">—</div>
-        </div>
       </div>
     </div>
 
