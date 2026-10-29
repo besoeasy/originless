@@ -89,7 +89,6 @@ func newRouterWithGateway(ctx context.Context, client *ipfs.Client, cfg config.C
 	mux.Handle("/stats", &statsHandler{client: client})
 	mux.Handle("/up", &uploadHandler{client: client})
 	mux.Handle("/upf", &uploadHandler{client: client, folder: true})
-	mux.Handle("/cid/{cid}", &cidHandler{client: client})
 	mux.Handle(gatewayPrefix, gateway)
 	mux.HandleFunc("/healthz", healthzHandler(client))
 	return corsMiddleware(mux), nil

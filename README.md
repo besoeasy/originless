@@ -17,12 +17,11 @@ No domain, no origin server, no records to point anywhere. The file is the addre
 ```bash
 docker run -d --name originless \
   -p 3232:3232 \
-  -v originless-data:/data \
   -e STORAGE_MAX=20GB \
   ghcr.io/besoeasy/originless:latest
 ```
 
-Open the built-in dashboard at [http://localhost:3232](http://localhost:3232). The `/data` volume keeps the IPFS repository when the container is replaced.
+Open the built-in dashboard at [http://localhost:3232](http://localhost:3232). IPFS storage is temporary: the repository lives inside the container and is discarded with it.
 
 Check readiness with:
 
@@ -76,11 +75,13 @@ http://localhost:3232/ipfs/<cid>/folder/nested/two.txt
 | `PORT` | `3232` | HTTP port inside the container. |
 | `IPFS_GATEWAY_FETCH` | `false` | Allow `/ipfs/` to retrieve CIDs that are not stored locally. |
 
-By default uploads are **unpinned**: hourly garbage collection at a 90% watermark may drop old content, and a CID can become unavailable after collection. Mount a volume at `/data` to keep the repository across container replacement, and pin CIDs you want to guarantee:
+Originless treats IPFS storage as temporary. Uploads are **unpinned** by default: hourly garbage collection at a 90% watermark may drop old content, and removing the container discards the repository. Pin a CID to protect it from collection while the container is running:
 
 ```bash
 docker exec originless ipfs pin add <cid>
 ```
+
+Keep another copy of anything you need to retain permanently.
 
 ## Routes
 
@@ -91,7 +92,6 @@ docker exec originless ipfs pin add <cid>
 | `GET` | `/stats` | IPFS repository metrics |
 | `POST` | `/up` | Upload a file or folder |
 | `POST` | `/upf` | Explicit folder upload |
-| `GET` | `/cid/{cid}` | Metadata and local availability for a CID |
 | `GET`, `HEAD` | `/ipfs/{cid}[/path]` | File or directory via the local Kubo gateway |
 
 ### `/ipfs/` gateway
@@ -103,7 +103,6 @@ The gateway is **local-only by default**. It serves CIDs this node already holds
 ```bash
 docker run -d --name originless \
   -p 3232:3232 \
-  -v originless-data:/data \
   -e IPFS_GATEWAY_FETCH=true \
   ghcr.io/besoeasy/originless:latest
 ```

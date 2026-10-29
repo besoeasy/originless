@@ -55,7 +55,7 @@ func NewClient(rawURL string) (*Client, error) {
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
-				DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+				DialContext:           (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
 				TLSHandshakeTimeout:   5 * time.Second,
 				ResponseHeaderTimeout: 30 * time.Second,
 				IdleConnTimeout:       60 * time.Second,
@@ -135,55 +135,6 @@ func decodeRepoStats(body []byte) (IPFSStats, error) {
 		stats.SizeStat.StorageMax = *wire.StorageMax
 	}
 	return stats, nil
-}
-
-// StatusError is returned when the Kubo API answers with an error status.
-type StatusError struct {
-	status  int
-	message string
-}
-
-func (e *StatusError) Error() string {
-	return e.message
-}
-
-func (e *StatusError) StatusCode() int {
-	return e.status
-}
-
-func (c *Client) Cat(ctx context.Context, cid string) (*http.Response, error) {
-	endpointURL, err := url.Parse(c.endpoint("api/v0/cat"))
-	if err != nil {
-		return nil, fmt.Errorf("parse IPFS cat URL: %w", err)
-	}
-	query := endpointURL.Query()
-	query.Set("arg", cid)
-	query.Set("offline", "true")
-	query.Set("progress", "false")
-	endpointURL.RawQuery = query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL.String(), http.NoBody)
-	if err != nil {
-		return nil, fmt.Errorf("create IPFS cat request: %w", err)
-	}
-	req.Header.Set("Accept", "application/octet-stream")
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request IPFS cat: %w", err)
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponse))
-		message := strings.TrimSpace(string(body))
-		if message == "" {
-			message = resp.Status
-		}
-		return nil, &StatusError{
-			status:  resp.StatusCode,
-			message: fmt.Sprintf("IPFS cat returned %s: %s", resp.Status, message),
-		}
-	}
-	return resp, nil
 }
 
 type UploadFile struct {
@@ -353,121 +304,4 @@ func parseAddSize(raw json.RawMessage) (int64, error) {
 		return strconv.ParseInt(text, 10, 64)
 	}
 	return strconv.ParseInt(value, 10, 64)
-}
-
-func (c *Client) postJSON(ctx context.Context, endpointPath string, query url.Values, target any) error {
-	endpointURL, err := url.Parse(c.endpoint(endpointPath))
-	if err != nil {
-		return fmt.Errorf("parse IPFS %s URL: %w", endpointPath, err)
-	}
-	endpointURL.RawQuery = query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL.String(), http.NoBody)
-	if err != nil {
-		return fmt.Errorf("create IPFS %s request: %w", endpointPath, err)
-	}
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("request IPFS %s: %w", endpointPath, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponse))
-	if err != nil {
-		return fmt.Errorf("read IPFS %s response: %w", endpointPath, err)
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		message := strings.TrimSpace(string(body))
-		if message == "" {
-			message = resp.Status
-		}
-		return &StatusError{
-			status:  resp.StatusCode,
-			message: fmt.Sprintf("IPFS %s returned %s: %s", endpointPath, resp.Status, message),
-		}
-	}
-	if target != nil {
-		if err := json.Unmarshal(body, target); err != nil {
-			return fmt.Errorf("decode IPFS %s response: %w", endpointPath, err)
-		}
-	}
-	return nil
-}
-
-type BlockStat struct {
-	Key  string `json:"Key"`
-	Size int64  `json:"Size"`
-}
-
-func (c *Client) BlockStat(ctx context.Context, cid string) (BlockStat, error) {
-	var stat BlockStat
-	if err := c.postJSON(ctx, "api/v0/block/stat", url.Values{"arg": {cid}}, &stat); err != nil {
-		return BlockStat{}, err
-	}
-	return stat, nil
-}
-
-type ObjectStat struct {
-	Hash           string `json:"Hash"`
-	NumLinks       int64  `json:"NumLinks"`
-	BlockSize      int64  `json:"BlockSize"`
-	LinksSize      int64  `json:"LinksSize"`
-	DataSize       int64  `json:"DataSize"`
-	CumulativeSize int64  `json:"CumulativeSize"`
-}
-
-func (c *Client) ObjectStat(ctx context.Context, cid string) (ObjectStat, error) {
-	var stat ObjectStat
-	if err := c.postJSON(ctx, "api/v0/object/stat", url.Values{"arg": {cid}}, &stat); err != nil {
-		return ObjectStat{}, err
-	}
-	return stat, nil
-}
-
-type LsLink struct {
-	Name   string `json:"Name"`
-	Hash   string `json:"Hash,omitempty"`
-	Size   uint64 `json:"Size"`
-	Type   int    `json:"Type"`
-	Target string `json:"Target,omitempty"`
-}
-
-type lsObject struct {
-	Hash  string   `json:"Hash"`
-	Links []LsLink `json:"Links"`
-}
-
-type lsResponse struct {
-	Objects []lsObject `json:"Objects"`
-}
-
-func (c *Client) Ls(ctx context.Context, cid string) ([]LsLink, error) {
-	var output lsResponse
-	if err := c.postJSON(ctx, "api/v0/ls", url.Values{"arg": {cid}}, &output); err != nil {
-		return nil, err
-	}
-	if len(output.Objects) > 0 {
-		return output.Objects[0].Links, nil
-	}
-	return nil, nil
-}
-
-func (c *Client) Content(ctx context.Context, cid string) ([]byte, json.RawMessage, error) {
-	resp, err := c.Cat(ctx, cid)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponse))
-	if err != nil {
-		return nil, nil, err
-	}
-	var decoded json.RawMessage
-	if err := json.Unmarshal(data, &decoded); err == nil {
-		return data, decoded, nil
-	}
-	return data, nil, nil
 }
