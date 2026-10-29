@@ -37,6 +37,7 @@
         <button id="refresh">Refresh stats</button>
       </div>
       <p class="stats" id="stats">Loading stats…</p>
+      <p class="stats" id="health">Node: checking…</p>
     </div>
 
     <div class="card">
@@ -62,7 +63,7 @@
     const uploadStatus = document.getElementById("upload-status");
     const uploadHistory = document.getElementById("upload-history");
     const statsEl = document.getElementById("stats");
-
+    const healthEl = document.getElementById("health");
     function formatBytes(bytes) {
       if (!bytes) return "0 B";
       const units = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -70,6 +71,21 @@
       let unit = 0;
       while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
       return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+    }
+
+    async function checkHealth() {
+      const start = performance.now();
+      try {
+        const res = await fetch("/healthz", { cache: "no-store" });
+        const latency = Math.round(performance.now() - start);
+        if (res.ok) {
+          healthEl.textContent = `Node: healthy · ${latency}ms`;
+        } else {
+          healthEl.textContent = "Node: degraded";
+        }
+      } catch (_) {
+        healthEl.textContent = "Node: unavailable";
+      }
     }
 
     async function loadStats() {
@@ -116,9 +132,10 @@
     folderInput.addEventListener("change", () => { if (folderInput.files.length) uploadFiles(folderInput.files); });
     if (pickFiles) pickFiles.addEventListener("click", () => fileInput.click());
     if (pickFolder) pickFolder.addEventListener("click", () => folderInput.click());
-    refreshBtn.addEventListener("click", loadStats);
+    refreshBtn.addEventListener("click", () => { loadStats(); checkHealth(); });
 
     loadStats();
+    checkHealth();
   </script>
   <!-- Shared Canvas Signed Chat -->
 </body>
