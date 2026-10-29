@@ -4,20 +4,33 @@ set -u
 IPFS_REPO="${IPFS_PATH:-/data/ipfs}"
 IPFS_API_URL="http://127.0.0.1:5001"
 STORAGE_MAX="${STORAGE_MAX:-20GB}"
+IPFS_GATEWAY_FETCH="${IPFS_GATEWAY_FETCH:-false}"
 # These GC policy values are intentionally fixed and cannot be overridden.
 STORAGE_GC_WATERMARK=90
 STORAGE_GC_PERIOD=1h
+
+case "$IPFS_GATEWAY_FETCH" in
+	true) gateway_no_fetch=false ;;
+	false) gateway_no_fetch=true ;;
+	*)
+		echo "originless: invalid IPFS_GATEWAY_FETCH=$IPFS_GATEWAY_FETCH: must be true or false" >&2
+		exit 1
+		;;
+esac
 
 if [ ! -f "$IPFS_REPO/config" ]; then
 	ipfs init --profile=lowpower
 fi
 ipfs config --json Routing.Type '"dhtclient"'
 # The Go app proxies /ipfs/ to this gateway. Keep it on loopback so the only
-# public port remains Originless itself.
-if ! ipfs config --json Addresses.Gateway '"/ip4/127.0.0.1/tcp/8080"'; then
+# public port remains Originless itself. NoFetch is on unless the operator
+# explicitly asks the gateway to retrieve CIDs from the IPFS network.
+if ! ipfs config --json Addresses.Gateway '"/ip4/127.0.0.1/tcp/8080"' \
+	|| ! ipfs config --json Gateway.NoFetch "$gateway_no_fetch"; then
 	echo "originless: invalid gateway configuration" >&2
 	exit 1
 fi
+echo "originless: gateway fetch=$IPFS_GATEWAY_FETCH"
 if ! ipfs config --json Datastore.StorageMax "\"$STORAGE_MAX\"" \
 	|| ! ipfs config --json Datastore.StorageGCWatermark "$STORAGE_GC_WATERMARK" \
 	|| ! ipfs config --json Datastore.GCPeriod "\"$STORAGE_GC_PERIOD\""; then

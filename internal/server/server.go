@@ -73,7 +73,13 @@ func NewRouter(client *ipfs.Client) (http.Handler, error) {
 
 // NewRouterWithOptions builds the router.
 func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) (http.Handler, error) {
-	gateway, err := newGatewayHandler(cfg.GatewayURL)
+	return newRouterWithGateway(ctx, client, cfg, defaultGatewayURL)
+}
+
+// newRouterWithGateway is NewRouterWithOptions with an injectable gateway URL
+// for tests. Production always uses the Kubo instance in this container.
+func newRouterWithGateway(ctx context.Context, client *ipfs.Client, cfg config.Config, gatewayURL string) (http.Handler, error) {
+	gateway, err := newGatewayHandler(gatewayURL)
 	if err != nil {
 		return nil, err
 	}

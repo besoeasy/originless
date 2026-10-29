@@ -12,13 +12,15 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"github.com/besoeasy/originless/internal/config"
 )
 
 const (
 	gatewayPrefix         = "/ipfs/"
 	gatewayCopyBufferSize = 32 * 1024
+
+	// The gateway is always the Kubo daemon in this container. Only tests
+	// construct a handler with another URL.
+	defaultGatewayURL = "http://127.0.0.1:8080"
 )
 
 // gatewayHandler serves /ipfs/{cid}[/path] by proxying to the Kubo gateway
@@ -33,7 +35,7 @@ type gatewayHandler struct {
 func newGatewayHandler(rawURL string) (*gatewayHandler, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		rawURL = config.DefaultGatewayURL
+		rawURL = defaultGatewayURL
 	}
 
 	upstream, err := url.Parse(rawURL)

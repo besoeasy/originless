@@ -8,7 +8,7 @@ Originless is a single-container backend for people who want to host files witho
 
 1. Run Originless at home with one command.
 2. Upload a file — it's stored on an embedded [IPFS](https://ipfs.tech) node and you get back its CID (the hash of the content).
-3. Anyone, anywhere, fetches the file by its CID — through your node's `/ipfs/<cid>` route when they can reach it, or through any public gateway or IPFS client. The address never changes because the content never changes.
+3. Anyone, anywhere, fetches the file by its CID — through your node's `/ipfs/<cid>` route, which serves content stored on your node by default, or through any public gateway or IPFS client. The address never changes because the content never changes.
 
 No domain, no origin server, no records to point anywhere. The file is the address — that's why it's *originless*.
 
@@ -74,7 +74,7 @@ http://localhost:3232/ipfs/<cid>/folder/nested/two.txt
 | --- | --- | --- |
 | `STORAGE_MAX` | `20GB` | Soft limit for the IPFS repository. |
 | `PORT` | `3232` | HTTP port inside the container. |
-| `IPFS_GATEWAY_URL` | `http://127.0.0.1:8080` | Kubo gateway used by `/ipfs/`. Change this only if you run Kubo separately; the bundled entrypoint starts its gateway on `127.0.0.1:8080`. |
+| `IPFS_GATEWAY_FETCH` | `false` | Allow `/ipfs/` to retrieve CIDs that are not stored locally. |
 
 By default uploads are **unpinned**: hourly garbage collection at a 90% watermark may drop old content, and a CID can become unavailable after collection. Mount a volume at `/data` to keep the repository across container replacement, and pin CIDs you want to guarantee:
 
@@ -96,18 +96,25 @@ docker exec originless ipfs pin add <cid>
 
 ### `/ipfs/` gateway
 
-`/ipfs/` proxies to Kubo's gateway on `127.0.0.1:8080`, so the only public port remains Originless itself. Directory indexes, `index.html` resolution, `Range`, `ETag`, conditional requests and `?filename=` are handled by Kubo.
+`/ipfs/` proxies to Kubo's gateway on the fixed loopback address `127.0.0.1:8080`, so the only public port remains Originless itself. Directory indexes, `index.html` resolution, `Range`, `ETag`, conditional requests and `?filename=` are handled by Kubo.
 
-When a CID is not stored locally, the gateway fetches it from the IPFS network if it can. This means anyone who can reach port `3232` can use the node to retrieve arbitrary IPFS content. To restrict the gateway to local content only:
+The gateway is **local-only by default**. It serves CIDs this node already holds and returns an error for anything else, so the node cannot be used to fetch arbitrary content from the IPFS network. To allow network fetches:
 
 ```bash
-docker exec originless ipfs config --json Gateway.NoFetch true
-docker restart originless
+docker run -d --name originless \
+  -p 3232:3232 \
+  -v originless-data:/data \
+  -e IPFS_GATEWAY_FETCH=true \
+  ghcr.io/besoeasy/originless:latest
 ```
+
+When enabled, anyone who can reach port `3232` can use the node to retrieve arbitrary IPFS content.
 
 ## Security
 
-Originless has no accounts and no authorization. Anyone who can reach port `3232` can upload, download and use the `/ipfs/` gateway. CORS is open to any origin by design.
+Originless has no accounts and no authorization. Anyone who can reach port `3232` can upload and download content held by the node. CORS is open to any origin by design.
+
+The `/ipfs/` gateway serves locally stored content by default. If you enable `IPFS_GATEWAY_FETCH=true`, the node will also retrieve arbitrary CIDs from the IPFS network on request.
 
 Expose the port only where you intend to use it. If you need private access, place Originless behind a VPN, Tailscale, or a reverse proxy with authentication. Kubo's API and gateway stay on loopback inside the container, and only `3232` is published. The swarm listener is internal to the container network unless you publish it.
 

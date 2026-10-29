@@ -20,9 +20,11 @@ func gatewayTestRouter(t *testing.T, gatewayURL string) http.Handler {
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
-	cfg := config.Default()
-	cfg.GatewayURL = gatewayURL
-	return mustRouter(t, context.Background(), client, cfg)
+	router, err := newRouterWithGateway(context.Background(), client, config.Default(), gatewayURL)
+	if err != nil {
+		t.Fatalf("newRouterWithGateway: %v", err)
+	}
+	return router
 }
 
 type gatewayRequest struct {
@@ -297,10 +299,8 @@ func TestRouterRejectsInvalidGatewayURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
-	cfg := config.Default()
-	cfg.GatewayURL = "file:///tmp/gateway"
 
-	if _, err := NewRouterWithOptions(context.Background(), client, cfg); err == nil {
-		t.Fatal("NewRouterWithOptions() error = nil, want invalid gateway URL error")
+	if _, err := newRouterWithGateway(context.Background(), client, config.Default(), "file:///tmp/gateway"); err == nil {
+		t.Fatal("newRouterWithGateway() error = nil, want invalid gateway URL error")
 	}
 }
