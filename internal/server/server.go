@@ -67,18 +67,17 @@ func corsMiddleware(next http.Handler) http.Handler {
 // NewRouter builds a router with the default configuration. It is convenient
 // for tests and for callers that do not need to tune anything.
 func NewRouter(client *ipfs.Client) (http.Handler, error) {
-	cfg := config.Default()
-	return NewRouterWithOptions(context.Background(), client, cfg)
+	return NewRouterWithOptions(client, config.Default())
 }
 
-// NewRouterWithOptions builds the router.
-func NewRouterWithOptions(ctx context.Context, client *ipfs.Client, cfg config.Config) (http.Handler, error) {
-	return newRouterWithGateway(ctx, client, cfg, defaultGatewayURL)
+// NewRouterWithOptions builds the router with the given configuration.
+func NewRouterWithOptions(client *ipfs.Client, cfg config.Config) (http.Handler, error) {
+	return newRouterWithGateway(client, cfg, defaultGatewayURL)
 }
 
 // newRouterWithGateway is NewRouterWithOptions with an injectable gateway URL
 // for tests. Production always uses the Kubo instance in this container.
-func newRouterWithGateway(ctx context.Context, client *ipfs.Client, cfg config.Config, gatewayURL string) (http.Handler, error) {
+func newRouterWithGateway(client *ipfs.Client, cfg config.Config, gatewayURL string) (http.Handler, error) {
 	gateway, err := newGatewayHandler(gatewayURL)
 	if err != nil {
 		return nil, err

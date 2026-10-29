@@ -21,7 +21,7 @@ docker run -d --name originless \
   ghcr.io/besoeasy/originless:latest
 ```
 
-Open the built-in dashboard at [http://localhost:3232](http://localhost:3232). IPFS storage is temporary: the repository lives inside the container and is discarded with it.
+Open the built-in dashboard at [http://localhost:3232](http://localhost:3232). IPFS storage is temporary: the repository lives inside the container and is removed with the container.
 
 Check readiness with:
 
@@ -73,7 +73,7 @@ http://localhost:3232/ipfs/<cid>/folder/nested/two.txt
 | --- | --- | --- |
 | `STORAGE_MAX` | `20GB` | Soft limit for the IPFS repository. |
 | `PORT` | `3232` | HTTP port inside the container. |
-| `IPFS_GATEWAY_FETCH` | `false` | Allow `/ipfs/` to retrieve CIDs that are not stored locally. |
+| `IPFS_GATEWAY_FETCH` | `false` | Sets Kubo's `Gateway.NoFetch`. When `false`, `/ipfs/` serves only CIDs stored locally. |
 
 Originless treats IPFS storage as temporary. Uploads are **unpinned** by default: hourly garbage collection at a 90% watermark may drop old content, and removing the container discards the repository. Pin a CID to protect it from collection while the container is running:
 

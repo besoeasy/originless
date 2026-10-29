@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,7 +19,7 @@ func gatewayTestRouter(t *testing.T, gatewayURL string) http.Handler {
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
-	router, err := newRouterWithGateway(context.Background(), client, config.Default(), gatewayURL)
+	router, err := newRouterWithGateway(client, config.Default(), gatewayURL)
 	if err != nil {
 		t.Fatalf("newRouterWithGateway: %v", err)
 	}
@@ -300,7 +299,7 @@ func TestRouterRejectsInvalidGatewayURL(t *testing.T) {
 		t.Fatalf("NewClient() error = %v", err)
 	}
 
-	if _, err := newRouterWithGateway(context.Background(), client, config.Default(), "file:///tmp/gateway"); err == nil {
+	if _, err := newRouterWithGateway(client, config.Default(), "file:///tmp/gateway"); err == nil {
 		t.Fatal("newRouterWithGateway() error = nil, want invalid gateway URL error")
 	}
 }

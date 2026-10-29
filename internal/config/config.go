@@ -1,9 +1,8 @@
 // Package config parses the environment-driven settings for Originless.
 //
-// Originless has no user accounts and no API authorization: an Ed25519
-// signature on an event is the only credential in the protocol, and it proves
-// authorship rather than permission. The settings here are therefore resource
-// bounds, not access control, and every one has a working default.
+// Originless has no user accounts and no API authorization. The settings here
+// are resource bounds, not access control, and every one has a working
+// default.
 package config
 
 import (

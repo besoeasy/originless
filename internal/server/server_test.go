@@ -1,14 +1,12 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/besoeasy/originless/internal/config"
 	"github.com/besoeasy/originless/internal/ipfs"
 )
 
@@ -193,15 +191,6 @@ func mustNewRouter(t *testing.T, client *ipfs.Client) http.Handler {
 	router, err := NewRouter(client)
 	if err != nil {
 		t.Fatalf("NewRouter: %v", err)
-	}
-	return router
-}
-
-func mustRouter(t *testing.T, ctx context.Context, client *ipfs.Client, cfg config.Config) http.Handler {
-	t.Helper()
-	router, err := NewRouterWithOptions(ctx, client, cfg)
-	if err != nil {
-		t.Fatalf("NewRouterWithOptions: %v", err)
 	}
 	return router
 }

@@ -52,11 +52,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// The reaper and any other background work stop when this context is done.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	handler, err := server.NewRouterWithOptions(ctx, client, cfg)
+	handler, err := server.NewRouterWithOptions(client, cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,7 +70,6 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-stop
-		cancel()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
