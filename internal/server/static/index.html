@@ -4,57 +4,144 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Originless</title>
-  <meta name="description" content="Originless — content-addressed file uploads over IPFS in a single container.">
+  <meta name="description" content="Originless — content-addressed file uploads over IPFS.">
   <style>
-    :root { color-scheme: light; --bg:#f5f5f7; --card:#fff; --text:#1d1d1f; --muted:#6e6e73; --accent:#007aff; --border:#d2d2d7; --radius:14px; }
+    :root {
+      --bg: #fafafa;
+      --fg: #171717;
+      --muted: #666;
+      --border: #eaeaea;
+      --card: #ffffff;
+      --accent: #000;
+      --radius: 12px;
+      --mono: "SF Mono", "Fira Code", ui-monospace, Menlo, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#000; --fg:#ededed; --muted:#888; --border:#333; --card:#111; --accent:#fff; }
+    }
     * { box-sizing: border-box; }
-    body { margin:0; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
-    main { max-width:720px; margin:0 auto; padding:2rem 1rem 4rem; }
-    h1 { font-size:2.25rem; margin:0 0 .25rem; letter-spacing:-.02em; }
-    .lede { color:var(--muted); margin:0 0 1.5rem; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:1.25rem; margin-bottom:1rem; }
-    .row { display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; }
-    button { cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--text); padding:.5rem .875rem; border-radius:999px; font:inherit; }
-    button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
-    #dropzone { border:2px dashed var(--border); border-radius:var(--radius); padding:2.5rem 1rem; text-align:center; color:var(--muted); cursor:pointer; transition:border-color .15s, background .15s; }
-    #dropzone.drag { border-color:var(--accent); background:#eef5ff; color:var(--text); }
-    #upload-status { margin-top:.75rem; color:var(--muted); font-size:.9rem; }
-    ul.history { list-style:none; padding:0; margin:.75rem 0 0; }
-    ul.history li { padding:.625rem 0; border-top:1px solid var(--border); font-size:.9rem; word-break:break-all; }
-    .gh { display:inline-flex; align-items:center; gap:.5rem; color:var(--text); text-decoration:none; font-weight:600; }
-    .stats { font-size:.875rem; color:var(--muted); }
-    .stats strong { color:var(--text); }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+    .wrap { width: 100%; max-width: 560px; }
+    .hero { text-align: center; margin-bottom: 2.5rem; }
+    .hero h1 { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.04em; margin: 0 0 .5rem; }
+    .hero p { color: var(--muted); margin: 0; font-size: 1.05rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; justify-content: center; }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      padding: .5rem 1rem;
+      border-radius: 6px;
+      font: inherit;
+      font-size: .875rem;
+      transition: border-color .15s, transform .05s;
+    }
+    button:hover { border-color: var(--fg); }
+    button:active { transform: scale(.98); }
+    button.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    button.primary:hover { opacity: .85; }
+    #dropzone {
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 2.5rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      font-size: .95rem;
+    }
+    #dropzone.drag { border-color: var(--fg); background: rgba(127,127,127,.06); color: var(--fg); }
+    #upload-status { margin-top: .75rem; color: var(--muted); font-size: .85rem; text-align: center; min-height: 1.2em; }
+    ul.history { list-style: none; padding: 0; margin: 1rem 0 0; }
+    ul.history li {
+      padding: .75rem 0;
+      border-top: 1px solid var(--border);
+      font-size: .85rem;
+      word-break: break-all;
+      font-family: var(--mono);
+    }
+    ul.history li:first-child { border-top: none; }
+    .stats { color: var(--muted); font-size: .85rem; text-align: center; margin: .5rem 0 0; }
+    .stats strong { color: var(--fg); font-weight: 600; }
+    .formats { margin-top: 1.5rem; }
+    .formats h3 { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 .75rem; font-weight: 600; }
+    .format-row { display: flex; flex-direction: column; gap: .25rem; margin-bottom: .75rem; }
+    .format-label { font-size: .75rem; color: var(--muted); }
+    .format-value {
+      font-family: var(--mono);
+      font-size: .8rem;
+      padding: .5rem .75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--fg);
+      word-break: break-all;
+    }
+    .links { text-align: center; margin-top: 2rem; }
+    .links a { color: var(--muted); text-decoration: none; font-size: .85rem; }
+    .links a:hover { color: var(--fg); }
+    input[type=file] { display: none; }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Originless</h1>
-    <p class="lede">Content-addressed file uploads over IPFS in a single container.</p>
-
-    <div class="card">
-      <div class="row" style="justify-content:space-between;">
-        <a class="gh" href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer">GitHub: besoeasy/originless</a>
-        <button id="refresh">Refresh stats</button>
-      </div>
-      <p class="stats" id="stats">Loading stats…</p>
-      <p class="stats" id="health">Node: checking…</p>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Originless</h1>
+      <p>Content-addressed file uploads over IPFS.</p>
     </div>
 
     <div class="card">
       <div id="dropzone">Drop files or folders here, or click to select</div>
-      <input id="file-input" type="file" multiple hidden>
-      <input id="folder-input" type="file" webkitdirectory directory multiple hidden>
-      <div class="row" style="margin-top:.75rem;">
+      <div class="row" style="margin-top: 1rem;">
         <button id="pick-files" type="button">Choose files</button>
         <button id="pick-folder" type="button">Choose folder</button>
       </div>
+      <input id="file-input" type="file" multiple>
+      <input id="folder-input" type="file" webkitdirectory directory multiple>
       <div id="upload-status"></div>
       <ul class="history" id="upload-history"></ul>
+      <p class="stats" id="stats">Loading stats…</p>
+      <p class="stats" id="health">Node: checking…</p>
     </div>
-  </main>
+
+    <div class="card formats">
+      <h3>Access your content</h3>
+      <div class="format-row">
+        <span class="format-label">IPFS protocol</span>
+        <div class="format-value" id="fmt-ipfs">ipfs://&lt;CID&gt;</div>
+      </div>
+      <div class="format-row">
+        <span class="format-label">Trustless gateway</span>
+        <div class="format-value" id="fmt-gw">https://trustless-gateway.link/ipfs/&lt;CID&gt;</div>
+      </div>
+    </div>
+
+    <div class="links">
+      <a href="https://github.com/besoeasy/originless" target="_blank" rel="noopener noreferrer">GitHub: besoeasy/originless</a>
+    </div>
+  </div>
 
   <script>
-    const refreshBtn = document.getElementById("refresh");
+    const refreshBtn = null;
     const dropzone = document.getElementById("dropzone");
     const fileInput = document.getElementById("file-input");
     const folderInput = document.getElementById("folder-input");
@@ -64,6 +151,9 @@
     const uploadHistory = document.getElementById("upload-history");
     const statsEl = document.getElementById("stats");
     const healthEl = document.getElementById("health");
+    const fmtIpfs = document.getElementById("fmt-ipfs");
+    const fmtGw = document.getElementById("fmt-gw");
+
     function formatBytes(bytes) {
       if (!bytes) return "0 B";
       const units = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -78,29 +168,28 @@
       try {
         const res = await fetch("/healthz", { cache: "no-store" });
         const latency = Math.round(performance.now() - start);
-        if (res.ok) {
-          healthEl.textContent = `Node: healthy · ${latency}ms`;
-        } else {
-          healthEl.textContent = "Node: degraded";
-        }
+        healthEl.textContent = res.ok ? `Node: healthy · ${latency}ms` : "Node: degraded";
       } catch (_) {
         healthEl.textContent = "Node: unavailable";
       }
     }
 
     async function loadStats() {
-      refreshBtn.disabled = true;
       try {
         const res = await fetch("/stats", { cache: "no-store", headers: { Accept: "application/json" } });
-        if (!res.ok) throw new Error(`Stats request failed (${res.status})`);
+        if (!res.ok) throw new Error();
         const data = await res.json();
         const size = data.SizeStat || {};
         statsEl.innerHTML = `Objects: <strong>${Number(data.NumObjects || 0).toLocaleString()}</strong> · Stored: <strong>${formatBytes(size.RepoSize)}</strong>` + (size.StorageMax ? ` of ${formatBytes(size.StorageMax)}` : "");
-      } catch (err) {
+      } catch (_) {
         statsEl.textContent = "Stats unavailable";
-      } finally {
-        refreshBtn.disabled = false;
       }
+    }
+
+    function updateFormats(cid) {
+      if (!cid) return;
+      fmtIpfs.textContent = `ipfs://${cid}`;
+      fmtGw.textContent = `https://trustless-gateway.link/ipfs/${cid}`;
     }
 
     function uploadFiles(files) {
@@ -129,6 +218,7 @@
           const li = document.createElement("li");
           li.textContent = `${data.name || "file"} — ${data.cid} (${formatBytes(data.bytes || data.size || totalBytes)})`;
           uploadHistory.prepend(li);
+          updateFormats(data.cid);
           loadStats();
         } else {
           uploadStatus.textContent = "Upload failed: " + (data.error || `HTTP ${xhr.status}`);
@@ -138,9 +228,6 @@
       xhr.send(formData);
     }
 
-    dropzone.addEventListener("click", () => fileInput.click());
-    dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("drag"); });
-    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
     async function collectDroppedFiles(dataTransfer) {
       const items = dataTransfer.items;
       if (!items || !items.length || typeof items[0].webkitGetAsEntry !== "function") {
@@ -156,7 +243,6 @@
         if (entry.isFile) {
           const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
           const relative = pathPrefix ? pathPrefix + "/" + file.name : file.name;
-          // Attach relative path for uploadFiles
           Object.defineProperty(file, "webkitRelativePath", { value: relative, writable: true });
           files.push(file);
         } else if (entry.isDirectory) {
@@ -169,16 +255,18 @@
       return files.length ? files : Array.from(dataTransfer.files || []);
     }
 
+    dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("drag"); });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
     dropzone.addEventListener("drop", async (e) => { e.preventDefault(); dropzone.classList.remove("drag"); const files = await collectDroppedFiles(e.dataTransfer); if (files.length) uploadFiles(files); });
     fileInput.addEventListener("change", () => { if (fileInput.files.length) uploadFiles(fileInput.files); });
     folderInput.addEventListener("change", () => { if (folderInput.files.length) uploadFiles(folderInput.files); });
     if (pickFiles) pickFiles.addEventListener("click", () => fileInput.click());
     if (pickFolder) pickFolder.addEventListener("click", () => folderInput.click());
-    refreshBtn.addEventListener("click", () => { loadStats(); checkHealth(); });
 
     loadStats();
     checkHealth();
   </script>
-  <!-- Shared Canvas Signed Chat -->
+  <!-- Refresh stats Shared Canvas Signed Chat -->
 </body>
 </html>
